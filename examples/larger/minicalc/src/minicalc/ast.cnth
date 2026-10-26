@@ -1,0 +1,177 @@
+// Syntax tree: what the parser produces and the evaluator consumes.
+// This module also holds everything that is true of the tree itself: operator facts,
+// building a call node, and printing a tree back as fully parenthesized text.
+module minicalc.ast;
+
+import std.int;
+
+pub variant BinOp {
+  Add,
+  Div,
+  Mod,
+  Mul,
+  Pow,
+  Sub,
+}
+
+// A tree node. Columns are kept only where an error can later point at the node:
+// the operator of a binary node, the name of a variable or a function.
+//
+// A function call has a fixed number of cases (`Call1`, `Call2`, `BadCall`) instead of a
+// `List<Expr>` of arguments. The evaluator can then recurse by `match` on the tree alone,
+// which the termination checker accepts as structural recursion without any `decreases`.
+// A recursion that walked a list of children would need a measure of its own.
+pub variant Expr {
+  // A call with some other number of arguments than one or two. The arguments were
+  // parsed (so their syntax is checked) but are not kept; only `count` matters.
+  BadCall(name: String, column: Int, count: Int),
+  Binary(op: BinOp, column: Int, left: Expr, right: Expr),
+  Call1(name: String, column: Int, argument: Expr),
+  Call2(name: String, column: Int, first: Expr, second: Expr),
+  Neg(operand: Expr),
+  Num(value: Int),
+  Var(name: String, column: Int),
+}
+
+// What one input line means.
+pub variant Statement {
+  Assign(name: String, column: Int, value: Expr),
+  Empty,
+  Eval(expr: Expr),
+}
+
+// Builds the node for `name(arguments)`. The parser collects the arguments in a list
+// because it does not know how many there will be; this is where they get a fixed shape.
+pub fn call(name: String, column: Int, arguments: List<Expr>) -> Expr {
+  if arguments.length == 1 {
+    Expr.Call1(name: name, column: column, argument: arguments[0])
+  } else if arguments.length == 2 {
+    Expr.Call2(
+      name: name,
+      column: column,
+      first: arguments[0],
+      second: arguments[1],
+    )
+  } else {
+    Expr.BadCall(name: name, column: column, count: arguments.length)
+  }
+}
+
+example call_picks_the_shape_by_the_argument_count for call {
+  call(name: "abs", column: 1, arguments: [Expr.Num(value: 1)])
+    == Expr.Call1(name: "abs", column: 1, argument: Expr.Num(value: 1))
+    and call(
+      name: "min",
+      column: 1,
+      arguments: [Expr.Num(value: 1), Expr.Num(value: 2)],
+    )
+      == Expr.Call2(
+        name: "min",
+        column: 1,
+        first: Expr.Num(value: 1),
+        second: Expr.Num(value: 2),
+      )
+    and call(name: "f", column: 3, arguments: [])
+      == Expr.BadCall(name: "f", column: 3, count: 0)
+}
+
+// The operators that bind to the right: `2 ^ 3 ^ 2` is `2 ^ (3 ^ 2)`.
+pub fn is_right_associative(op: BinOp) -> Bool {
+  match op {
+    BinOp.Pow => true,
+    _ => false,
+  }
+}
+
+example only_pow_is_right_associative for is_right_associative {
+  is_right_associative(op: BinOp.Pow)
+    and not is_right_associative(op: BinOp.Sub)
+}
+
+// Binding strength: higher binds tighter. Unary minus sits between `*` and `^`, which
+// is what makes `-2 ^ 2` mean `-(2 ^ 2)`. The `ensures` spells the table out as a fact
+// that the verifier can use when the parser's contracts mention `precedence`.
+pub fn precedence(op: BinOp) -> Int {
+  ensures match op {
+    BinOp.Add => result == 1,
+    BinOp.Sub => result == 1,
+    BinOp.Mul => result == 2,
+    BinOp.Div => result == 2,
+    BinOp.Mod => result == 2,
+    BinOp.Pow => result == 4,
+  };
+
+  match op {
+    BinOp.Add => 1,
+    BinOp.Sub => 1,
+    BinOp.Mul => 2,
+    BinOp.Div => 2,
+    BinOp.Mod => 2,
+    BinOp.Pow => 4,
+  }
+}
+
+example precedence_orders_the_operators for precedence {
+  precedence(op: BinOp.Add) < precedence(op: BinOp.Mul)
+    and precedence(op: BinOp.Mul) < precedence(op: BinOp.Pow)
+}
+
+// A fully parenthesized rendering. It makes the shape of a tree visible in one line,
+// which is what the parser examples compare against instead of spelling out nodes.
+// Recursion on the parts of `expr` is structural, so there is no `decreases`.
+pub fn show(expr: Expr) -> String {
+  match expr {
+    Expr.BadCall(name: name, column: _, count: count) => name
+      ++ "(<"
+      ++ int.to_text(value: count)
+      ++ " args>)",
+    Expr.Binary(op: op, column: _, left: left, right: right) => "("
+      ++ show(expr: left)
+      ++ " "
+      ++ symbol(op: op)
+      ++ " "
+      ++ show(expr: right)
+      ++ ")",
+    Expr.Call1(name: name, column: _, argument: argument) => name
+      ++ "("
+      ++ show(expr: argument)
+      ++ ")",
+    Expr.Call2(name: name, column: _, first: first, second: second) => name
+      ++ "("
+      ++ show(expr: first)
+      ++ ", "
+      ++ show(expr: second)
+      ++ ")",
+    Expr.Neg(operand: operand) => "(-" ++ show(expr: operand) ++ ")",
+    Expr.Num(value: value) => int.to_text(value: value),
+    Expr.Var(name: name, column: _) => name,
+  }
+}
+
+example show_makes_the_grouping_visible for show {
+  show(
+    expr: Expr.Binary(
+      op: BinOp.Add,
+      column: 3,
+      left: Expr.Num(value: 1),
+      right: Expr.Neg(operand: Expr.Var(name: "x", column: 7)),
+    ),
+  )
+    == "(1 + (-x))"
+}
+
+// The text of an operator, for `show` and for error messages.
+pub fn symbol(op: BinOp) -> String {
+  match op {
+    BinOp.Add => "+",
+    BinOp.Div => "/",
+    BinOp.Mod => "%",
+    BinOp.Mul => "*",
+    BinOp.Pow => "^",
+    BinOp.Sub => "-",
+  }
+}
+
+example symbol_examples for symbol {
+  symbol(op: BinOp.Mod) == "%" and symbol(op: BinOp.Pow) == "^"
+}

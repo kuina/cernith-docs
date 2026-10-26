@@ -1,0 +1,283 @@
+// Session: runs a list of input lines and returns the output lines. It is pure: the
+// variables are an ordinary value that each step takes and gives back, so a whole
+// session can be checked by an example, with no input or output involved.
+module minicalc.session;
+
+import minicalc.ast as ast;
+import minicalc.eval as eval;
+import minicalc.parser as parser;
+import minicalc.report as report;
+import minicalc.token as token;
+import std.int;
+import std.map;
+import std.text;
+
+// What one line did: the variables afterwards and the lines to print.
+pub record Step {
+  env: map.Map<String, Int>,
+  lines: List<String>,
+}
+
+// The command that lists the variables.
+pub const vars_command: String = ":vars";
+
+// Runs the statement that a line was parsed into.
+fn execute(
+  env: map.Map<String, Int>,
+  source: String,
+  statement: ast.Statement,
+) -> Step {
+  match statement {
+    ast.Statement.Assign(
+      name: name,
+      column: column,
+      value: value,
+    ) => if eval.is_function(name: name) {
+      failure(
+        env: env,
+        source: source,
+        diagnostic: report.assign_to_function(name: name, column: column),
+      )
+    } else {
+      match eval.evaluate(env: env, expr: value) {
+        Ok(value: number) => Step(
+          env: map.insert(map: env, key: name, value: number),
+          lines: [name ++ " = " ++ int.to_text(value: number)],
+        ),
+        Err(error: error) => failure(
+          env: env,
+          source: source,
+          diagnostic: report.from_eval(error: error),
+        ),
+      }
+    },
+    ast.Statement.Empty => Step(env: env, lines: []),
+    ast.Statement.Eval(expr: expr) => match eval.evaluate(
+      env: env,
+      expr: expr,
+    ) {
+      Ok(value: number) => Step(env: env, lines: [int.to_text(value: number)]),
+      Err(error: error) => failure(
+        env: env,
+        source: source,
+        diagnostic: report.from_eval(error: error),
+      ),
+    },
+  }
+}
+
+// An error leaves the variables as they were and prints the three-line report. Nothing
+// else about the session changes, which is why one bad line never stops the run.
+fn failure(
+  env: map.Map<String, Int>,
+  source: String,
+  diagnostic: report.Diagnostic,
+) -> Step {
+  Step(env: env, lines: report.render(source: source, diagnostic: diagnostic))
+}
+
+// Runs every line in order, passing the variables from each line to the next, and
+// returns everything that would be printed. `for` always terminates (it walks a finite
+// list), so there is nothing to prove here.
+pub fn run_all(lines: List<String>) -> List<String> {
+  var env: map.Map<String, Int> = map.empty();
+  var output: List<String> = [];
+  for line in lines {
+    let step = run_line(env: env, source: line);
+    env = step.env;
+    output = output ++ step.lines;
+  }
+  output
+}
+
+example run_all_goes_on_after_an_error for run_all {
+  run_all(lines: ["x = 2", "x / 0", "", "x + 1"])
+    == ["x = 2", "error at column 3: division by zero", "x / 0", "  ^", "3"]
+}
+
+example run_all_reports_each_kind_of_error for run_all {
+  run_all(lines: ["2 + ", "(1 + 2", "y + 1", "sqrt(4)", "min(1)", "2 ^ -1"])
+    == [
+      "error at column 5: unexpected end of input",
+      "2 + ",
+      "    ^",
+      "error at column 7: missing `)`",
+      "(1 + 2",
+      "      ^",
+      "error at column 1: unknown variable `y`",
+      "y + 1",
+      "^",
+      "error at column 1: unknown function `sqrt`",
+      "sqrt(4)",
+      "^",
+      "error at column 1: `min` takes 2 arguments, got 1",
+      "min(1)",
+      "^",
+      "error at column 3: negative exponent",
+      "2 ^ -1",
+      "  ^",
+    ]
+}
+
+example run_all_threads_the_variables for run_all {
+  run_all(lines: ["x = 4 * (2 + 1)", "y = x - 2", "x * y", ":vars"])
+    == ["x = 12", "y = 10", "120", "x = 12", "y = 10"]
+}
+
+// A variable keeps its value for the lines after it.
+property assignment_is_remembered for run_all(value: Int) {
+  let number = int.to_text(value: value);
+  run_all(lines: ["n = " ++ number, "n"]) == ["n = " ++ number, number]
+}
+
+property division_rounds_down_and_remainder_follows for run_all(
+  dividend: Int,
+  divisor: Int,
+) {
+  requires divisor != 0;
+
+  let a = int.to_text(value: dividend);
+  let b = int.to_text(value: divisor);
+  run_all(lines: [a ++ " / " ++ b])
+    == [int.to_text(value: int.div_floor(dividend: dividend, divisor: divisor))]
+    and run_all(lines: [a ++ " % " ++ b])
+      == [
+        int.to_text(value: int.rem_floor(dividend: dividend, divisor: divisor)),
+      ]
+}
+
+property gcd_is_symmetric for run_all(first: Int, second: Int) {
+  let a = int.to_text(value: first);
+  let b = int.to_text(value: second);
+  run_all(lines: ["gcd(" ++ a ++ ", " ++ b ++ ")"])
+    == run_all(lines: ["gcd(" ++ b ++ ", " ++ a ++ ")"])
+}
+
+// `*` binds tighter than `+`, whatever the numbers are (even negative ones).
+property multiplication_binds_tighter_than_addition for run_all(
+  first: Int,
+  second: Int,
+  third: Int,
+) {
+  run_all(
+    lines: [
+      int.to_text(value: first)
+        ++ " + "
+        ++ int.to_text(value: second)
+        ++ " * "
+        ++ int.to_text(value: third),
+    ],
+  )
+    == [int.to_text(value: first + second * third)]
+}
+
+// Sums of the form `a op b` printed and parsed again: the session agrees with the
+// integers it is built on.
+property sums_and_products_match_the_integers for run_all(
+  first: Int,
+  second: Int,
+) {
+  let a = int.to_text(value: first);
+  let b = int.to_text(value: second);
+  run_all(lines: [a ++ " + " ++ b]) == [int.to_text(value: first + second)]
+    and run_all(lines: [a ++ " - " ++ b])
+      == [int.to_text(value: first - second)]
+    and run_all(lines: [a ++ " * " ++ b])
+      == [int.to_text(value: first * second)]
+}
+
+// Runs one line against the variables. The three stages (lex, parse, execute) are
+// chained with `match` because each has its own error type; the report module turns each
+// of them into the same `Diagnostic`.
+pub fn run_line(env: map.Map<String, Int>, source: String) -> Step {
+  if text.is_empty(of: text.trim(of: source)) {
+    Step(env: env, lines: [])
+  } else if text.trim(of: source) == vars_command {
+    Step(env: env, lines: variable_lines(env: env))
+  } else {
+    match token.lex(source: source) {
+      Err(error: error) => failure(
+        env: env,
+        source: source,
+        diagnostic: report.from_lex(error: error),
+      ),
+      Ok(value: tokens) => match parser.parse_line(tokens: tokens) {
+        Err(error: error) => failure(
+          env: env,
+          source: source,
+          diagnostic: report.from_parse(error: error),
+        ),
+        Ok(value: statement) => execute(
+          env: env,
+          source: source,
+          statement: statement,
+        ),
+      },
+    }
+  }
+}
+
+example run_line_evaluates_and_assigns for run_line {
+  run_line(env: map.empty(), source: "1 + 2 * 3").lines == ["7"]
+    and run_line(env: map.empty(), source: "x = 4 * (2 + 1)").lines
+      == ["x = 12"]
+    and map.get(
+      map: run_line(env: map.empty(), source: "x = 4 * (2 + 1)").env,
+      key: "x",
+    )
+      == Some(value: 12)
+    and run_line(env: map.empty(), source: "   ").lines == []
+}
+
+example run_line_reports_errors_in_three_lines_and_keeps_the_variables for run_line {
+  run_line(env: map.empty(), source: "1 + $2").lines
+    == ["error at column 5: unexpected character `$`", "1 + $2", "    ^"]
+    and run_line(env: map.empty(), source: "abs = 3").lines
+      == [
+        "error at column 1: cannot assign to the function `abs`",
+        "abs = 3",
+        "^",
+      ]
+    and map.size(map: run_line(env: map.empty(), source: "x = 1 / 0").env) == 0
+}
+
+// A law about any line, not only about the examples: when a line goes wrong the report
+// has exactly three lines and the variables are untouched.
+property an_error_report_has_three_lines_and_changes_nothing for run_line(
+  source: String,
+) {
+  let step = run_line(env: map.empty(), source: source);
+  if step.lines.length > 0
+    and text.starts_with(of: step.lines[0], prefix: "error at column ") {
+    step.lines.length == 3
+      and step.lines[1] == source
+      and map.size(map: step.env) == 0
+  } else {
+    true
+  }
+}
+
+// The lines `:vars` prints: one `name = value` per variable, ordered by name (a map
+// keeps its keys sorted), or a note if there are none.
+pub fn variable_lines(env: map.Map<String, Int>) -> List<String> {
+  if map.size(map: env) == 0 {
+    return ["no variables"];
+  }
+  var lines: List<String> = [];
+  for entry in map.entries(map: env) {
+    lines = lines ++ [entry.key ++ " = " ++ int.to_text(value: entry.value)];
+  }
+  lines
+}
+
+example variable_lines_are_sorted_by_name for variable_lines {
+  variable_lines(
+    env: map.insert(
+      map: map.insert(map: map.empty(), key: "zeta", value: 1),
+      key: "alpha",
+      value: -2,
+    ),
+  )
+    == ["alpha = -2", "zeta = 1"]
+    and variable_lines(env: map.empty()) == ["no variables"]
+}

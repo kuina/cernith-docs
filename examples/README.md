@@ -4,6 +4,8 @@ Small, verified programs that show how to write Cernith. They are meant to be re
 
 Every sample passes `cernith fmt --check`, `cernith check --release`, `cernith check --verify` (no diagnostics), `cernith test`, and, if it has `main`, `cernith run`. The files in `mistakes/` are the opposite: each one is rejected with the code on its first line.
 
+"No diagnostics" is not the same as "every proof was attempted": definitions that use `Float64` arithmetic, `async`, or calls to a function such as `int.pow` stay at assurance level `typed` (see `summary.levels` in the JSON output of `cernith check --verify`). `tools/check_examples.py` lists them as notes; in these samples they are `average` (Float64), the async functions of `concurrency/`, and `raise` in `larger/minicalc`.
+
 Verified with Cernith cernith 2.0.0 (compiler repository commit `aae4ddcf`).
 
 ```text
@@ -120,6 +122,16 @@ Tasks, channels, and std.parallel.
 | [`channels_pipeline.cnth`](concurrency/channels_pipeline.cnth) | bounded channels, send and receive, close, tasks of one scope connected like a pipeline | [`language/18-concurrency.md`](../en/language/18-concurrency.md) |
 | [`parallel_map.cnth`](concurrency/parallel_map.cnth) | std.parallel (map, filter, fold, any, all), why its function arguments have no effects, a property that ties it to std.list | [`language/18-concurrency.md`](../en/language/18-concurrency.md) |
 | [`tasks_and_scopes.cnth`](concurrency/tasks_and_scopes.cnth) | the async effect, await, async.scope and async.spawn, sleep on a virtual clock, race, with_timeout | [`language/18-concurrency.md`](../en/language/18-concurrency.md) |
+
+## Larger programs
+
+Complete small tools and games, each a package of several modules with its own README, sample input, and end-to-end examples.
+
+| File | What it shows | Chapter |
+|---|---|---|
+| [`expense_report/`](larger/expense_report/) | a pure core (csv, money, date, expense, options, aggregate, report, app) with one thin io shell, collecting every validation problem instead of stopping at the first, integer money without Float64, contracts, examples and properties in every module | [`language/14-modules-and-packages.md`](../en/language/14-modules-and-packages.md) |
+| [`minicalc/`](larger/minicalc/) | a multi-module package, a pure core (lexer, parser, evaluator, session) behind a thin io shell, recursion with decreases, structural recursion, errors as values, contracts the verifier proves | [`language/14-modules-and-packages.md`](../en/language/14-modules-and-packages.md) |
+| [`sokoban/`](larger/sokoban/) | a package of small pure modules, validated input as a Result, immutable state with unlimited undo, records with invariants, contracts and laws that the checker proves, one thin io shell | [`language/14-modules-and-packages.md`](../en/language/14-modules-and-packages.md) |
 
 ## Mistakes the compiler rejects
 

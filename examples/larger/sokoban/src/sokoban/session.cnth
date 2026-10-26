@@ -1,0 +1,218 @@
+// Playing a game from lines of text.
+// A line is a string of command letters. `apply_line` plays it, collecting notes for the
+// player, and `play` turns a whole input into the text a terminal would show: after every
+// line the line itself, its notes, the board and the status. Nothing here does any io,
+// so whole sessions are checked by `example`s that compare lists of strings.
+module sokoban.session;
+
+// An import may be renamed. The functions below take a parameter called `game`, and a
+// parameter may not have the name of an imported module, so the module is `rules` here.
+import sokoban.game as rules;
+import sokoban.render;
+import sokoban.samples;
+import std.int;
+import std.text;
+
+// What `apply_line` returns: the new game and the messages for the player.
+pub record Report {
+  game: rules.Game,
+  notes: List<String>,
+}
+
+// Applies the commands one after another. Used by the property below to reach positions
+// that include undo and restart.
+fn apply_all(game: rules.Game, commands: List<rules.Command>) -> rules.Game {
+  var current: rules.Game = game;
+  for command in commands {
+    current = rules.apply_command(game: current, command: command);
+  }
+  current
+}
+
+// Law: no sequence of commands, undo and restart included, changes the number of boxes,
+// and the move counter of the game never goes below zero.
+property commands_never_change_the_box_count for apply_all(
+  commands: List<rules.Command>,
+) {
+  match room_game() {
+    None => false,
+    Some(value: start) => {
+      let end = apply_all(game: start, commands: commands);
+      end.state.boxes.length == 2 and end.state.moves >= 0
+    },
+  }
+}
+
+// Applies a line of command letters in order. Letters that mean nothing are skipped with
+// a note. Once the puzzle is solved the rest of the line is not played, because a
+// solved game is final; a note says how many letters were left. The loop is a `while`
+// since it may stop early; `decreases` names what shrinks on every pass: the letters
+// not yet looked at.
+pub fn apply_line(game: rules.Game, line: String) -> Report {
+  let letters = text.chars(of: line);
+  var current: rules.Game = game;
+  var notes: List<String> = [];
+  var index: Int = 0;
+  while index < letters.length and not rules.is_solved(game: current) {
+    invariant index >= 0 and index <= letters.length;
+    decreases letters.length - index;
+
+    match rules.parse_command(letter: letters[index]) {
+      None => {
+        notes = notes ++ ["unknown move '" ++ letters[index] ++ "' skipped"];
+      },
+      Some(value: command) => {
+        if command == rules.Command.Undo and current.trail.past.length == 0 {
+          notes = notes ++ ["nothing to undo"];
+        }
+        current = rules.apply_command(game: current, command: command);
+      },
+    }
+    index = index + 1;
+  }
+  let ignored = letters.length - index;
+  if ignored > 0 {
+    notes = notes
+      ++ [
+        "solved: ignoring the last "
+          ++ int.to_text(value: ignored)
+          ++ " move(s) of this line",
+      ];
+  }
+  Report(game: current, notes: notes)
+}
+
+example apply_line_plays_letters_in_order for apply_line {
+  match room_game() {
+    Some(value: start) => {
+      let report = apply_line(game: start, line: "uz");
+      report.game == start and report.notes == []
+    },
+    None => false,
+  }
+}
+
+example apply_line_reports_an_empty_undo for apply_line {
+  match room_game() {
+    Some(value: start) => apply_line(game: start, line: "z").notes
+      == ["nothing to undo"],
+    None => false,
+  }
+}
+
+example apply_line_skips_unknown_letters for apply_line {
+  match room_game() {
+    Some(value: start) => {
+      let report = apply_line(game: start, line: "uqd");
+      report.game.state.moves == 2
+        and report.notes == ["unknown move 'q' skipped"]
+    },
+    None => false,
+  }
+}
+
+// The sample room is solved by `ullldrdr` (8 moves). Letters after the last needed one
+// are not played, and a restart or an undo after that point would not be either.
+example apply_line_stops_when_solved for apply_line {
+  match room_game() {
+    Some(value: start) => {
+      let report = apply_line(game: start, line: "ullldrdrxz");
+      rules.is_solved(game: report.game)
+        and report.game.state.moves == 8
+        and report.notes == ["solved: ignoring the last 2 move(s) of this line"]
+        and apply_line(game: report.game, line: "u").notes
+          == ["solved: ignoring the last 1 move(s) of this line"]
+    },
+    None => false,
+  }
+}
+
+// Plays a whole session against a game: the first board, then for every input line the
+// line itself (after `> `), the notes it caused and the board that results. The caller
+// prints the lines; nothing here touches the outside world.
+pub fn play(game: rules.Game, input: List<String>) -> List<String> {
+  var current: rules.Game = game;
+  var out: List<String> = view(game: game);
+  for line in input {
+    let report = apply_line(game: current, line: line);
+    current = report.game;
+    out = out ++ ["", "> " ++ line] ++ report.notes ++ view(game: current);
+  }
+  out
+}
+
+example play_prints_a_board_after_every_line for play {
+  room_session(input: ["lq", "z"])
+    == [
+      "#######",
+      "#     #",
+      "# $.@ #",
+      "#  $. #",
+      "#     #",
+      "#######",
+      "moves: 0, pushes: 0",
+      "",
+      "> lq",
+      "unknown move 'q' skipped",
+      "#######",
+      "#     #",
+      "# $+  #",
+      "#  $. #",
+      "#     #",
+      "#######",
+      "moves: 1, pushes: 0",
+      "",
+      "> z",
+      "#######",
+      "#     #",
+      "# $.@ #",
+      "#  $. #",
+      "#     #",
+      "#######",
+      "moves: 0, pushes: 0",
+    ]
+}
+
+example play_with_no_input_prints_the_first_board for play {
+  room_session(input: [])
+    == [
+      "#######",
+      "#     #",
+      "# $.@ #",
+      "#  $. #",
+      "#     #",
+      "#######",
+      "moves: 0, pushes: 0",
+    ]
+}
+
+// A small game on the sample room, or None if the fixture stopped parsing.
+fn room_game() -> Option<rules.Game> {
+  match samples.room() {
+    Some(value: puzzle) => Some(value: rules.new_game(puzzle: puzzle)),
+    None => None,
+  }
+}
+
+// An input played from the sample room; the result as printed.
+fn room_session(input: List<String>) -> List<String> {
+  match room_game() {
+    Some(value: start) => play(game: start, input: input),
+    None => [],
+  }
+}
+
+// The board and the status line of a game, ready to print.
+pub fn view(game: rules.Game) -> List<String> {
+  render.frame(grid: game.grid, state: game.state)
+}
+
+example view_ends_with_the_status_line for view {
+  match room_game() {
+    Some(value: start) => {
+      let lines = view(game: start);
+      lines.length == 7 and lines[6] == "moves: 0, pushes: 0"
+    },
+    None => false,
+  }
+}

@@ -1,0 +1,311 @@
+// The command-line options, parsed into a record. Nothing here reads the input or
+// prints: `parse` takes the argument list and returns `Options` or the first error.
+//
+//   --month YYYY-MM        only expenses of that month
+//   --budget CATEGORY=AMOUNT   warn when the category exceeds the amount (repeatable)
+//   --top N                how many largest expenses to list (0 to 100, default 3)
+//   --strict               exit with status 1 when the data had problems
+module expense_report.options;
+
+import expense_report.date as date;
+import expense_report.money as money;
+import std.int;
+import std.list;
+import std.text;
+
+// A spending limit for one category. The category name is checked against the known
+// categories by the caller; this module only checks the shape.
+pub record Budget {
+  category: String,
+  limit: money.Cents,
+}
+
+pub variant OptionError {
+  BadBudget(given: String),
+  BadMonth(given: String, error: date.DateError),
+  BadTop(given: String),
+  DuplicateBudget(category: String),
+  MissingValue(name: String),
+  UnknownOption(name: String),
+}
+
+// The invariant keeps `top` in a sensible range for every Options value that exists,
+// including the ones built by `Options.with(base: ..., top: ...)`.
+pub record Options {
+  month: Option<date.Month>,
+  budgets: List<Budget>,
+  top: Int,
+  strict: Bool,
+} where top >= 0 and top <= 100;
+
+// One option with a value: `--month 2026-10`, `--budget food=300`, `--top 5`.
+fn apply_option(
+  options: Options,
+  name: String,
+  given: String,
+) -> Result<Options, OptionError> {
+  match name {
+    "--month" => match date.parse_month(source: given) {
+      Ok(value: month) => Ok(
+        value: Options.with(base: options, month: Some(value: month)),
+      ),
+      Err(error: error) => Err(
+        error: OptionError.BadMonth(given: given, error: error),
+      ),
+    },
+    "--budget" => {
+      let budget = parse_budget(given: given)?;
+      let taken = list.any(
+        items: options.budgets,
+        test: fn(item: Budget) -> Bool {
+          item.category == budget.category
+        },
+      );
+      if taken {
+        Err(error: OptionError.DuplicateBudget(category: budget.category))
+      } else {
+        Ok(
+          value: Options.with(
+            base: options,
+            budgets: options.budgets ++ [budget],
+          ),
+        )
+      }
+    },
+    "--top" => match int.parse(text: given) {
+      Some(value: count) => if count >= 0 and count <= 100 {
+        Ok(value: Options.with(base: options, top: count))
+      } else {
+        Err(error: OptionError.BadTop(given: given))
+      },
+      None => Err(error: OptionError.BadTop(given: given)),
+    },
+    _ => Err(error: OptionError.UnknownOption(name: name)),
+  }
+}
+
+// Any non-negative limit is read back exactly as it was written.
+pub fn budget_keeps_its_limit(cents: Int) -> Bool {
+  match parse_budget(
+    given: "food=" ++ money.format(amount: money.from_int(value: cents)),
+  ) {
+    Ok(value: budget) => budget.limit == money.from_int(value: cents),
+    Err(error: _) => false,
+  }
+}
+
+example budget_keeps_its_limit_cases for budget_keeps_its_limit {
+  budget_keeps_its_limit(cents: 30000) and budget_keeps_its_limit(cents: 0)
+}
+
+property budget_limit_round_trips for budget_keeps_its_limit(cents: Int) {
+  requires cents >= 0;
+
+  budget_keeps_its_limit(cents: cents)
+}
+
+// What a run uses when no option is given.
+pub fn defaults() -> Options {
+  Options(month: None, budgets: [], top: 3, strict: false)
+}
+
+example defaults_show_three_and_not_strict for defaults {
+  defaults().top == 3 and not defaults().strict and defaults().budgets == []
+}
+
+pub fn describe(error: OptionError) -> String {
+  match error {
+    OptionError.BadBudget(given: given) => "bad --budget \""
+      ++ given
+      ++ "\": write it as CATEGORY=AMOUNT, for example food=300.00",
+    OptionError.BadMonth(given: given, error: cause) => "bad --month \""
+      ++ given
+      ++ "\": "
+      ++ date.describe(error: cause),
+    OptionError.BadTop(given: given) => "bad --top \""
+      ++ given
+      ++ "\": use a whole number from 0 to 100",
+    OptionError.DuplicateBudget(category: category) => "two budgets for "
+      ++ category,
+    OptionError.MissingValue(name: name) => "option "
+      ++ name
+      ++ " needs a value",
+    OptionError.UnknownOption(name: name) => "unknown option \""
+      ++ name
+      ++ "\"",
+  }
+}
+
+example describe_cases for describe {
+  describe(error: OptionError.UnknownOption(name: "--verbose"))
+    == "unknown option \"--verbose\""
+    and describe(error: OptionError.MissingValue(name: "--top"))
+      == "option --top needs a value"
+    and describe(error: OptionError.BadTop(given: "x"))
+      == "bad --top \"x\": use a whole number from 0 to 100"
+}
+
+// The error for a name that is the last argument, so it has no value after it. An
+// unknown name is still reported as unknown, because that is the more useful message.
+fn lonely_name(name: String) -> OptionError {
+  if name == "--month" or name == "--budget" or name == "--top" {
+    OptionError.MissingValue(name: name)
+  } else {
+    OptionError.UnknownOption(name: name)
+  }
+}
+
+example lonely_name_cases for lonely_name {
+  lonely_name(name: "--top") == OptionError.MissingValue(name: "--top")
+    and lonely_name(name: "--x") == OptionError.UnknownOption(name: "--x")
+}
+
+// Reads the arguments left to right. `--strict` stands alone; every other option takes
+// the next argument as its value. The first problem ends the parse.
+pub fn parse(args: List<String>) -> Result<Options, OptionError> {
+  parse_from(rest: args, options: defaults())
+}
+
+example parse_reads_every_option for parse {
+  parse(
+    args: [
+      "--month",
+      "2026-10",
+      "--budget",
+      "food=300.00",
+      "--top",
+      "5",
+      "--strict",
+    ],
+  )
+    == Ok(
+      value: Options(
+        month: Some(value: date.Month(year: 2026, month: 10)),
+        budgets: [
+          Budget(category: "food", limit: money.from_int(value: 30000)),
+        ],
+        top: 5,
+        strict: true,
+      ),
+    )
+}
+
+example parse_repeats_budgets for parse {
+  parse(args: ["--budget", "food=1", "--budget", "travel=2"])
+    == Ok(
+      value: Options.with(
+        base: defaults(),
+        budgets: [
+          Budget(category: "food", limit: money.from_int(value: 100)),
+          Budget(category: "travel", limit: money.from_int(value: 200)),
+        ],
+      ),
+    )
+}
+
+example parse_reports_each_error for parse {
+  parse(args: ["--verbose"])
+    == Err(error: OptionError.UnknownOption(name: "--verbose"))
+    and parse(args: ["--top"])
+      == Err(error: OptionError.MissingValue(name: "--top"))
+    and parse(args: ["--top", "200"])
+      == Err(error: OptionError.BadTop(given: "200"))
+    and parse(args: ["--month", "2026-13"])
+      == Err(
+        error: OptionError.BadMonth(
+          given: "2026-13",
+          error: date.DateError.MonthOutOfRange(month: 13),
+        ),
+      )
+    and parse(args: ["--budget", "food=1", "--budget", "food=2"])
+      == Err(error: OptionError.DuplicateBudget(category: "food"))
+    and parse(args: ["stray"])
+      == Err(error: OptionError.UnknownOption(name: "stray"))
+}
+
+// Every option is accepted in any order, and `--top` may be given twice (the last wins).
+example parse_takes_options_in_any_order for parse {
+  parse(args: ["--strict", "--top", "1", "--top", "2"])
+    == Ok(value: Options.with(base: defaults(), top: 2, strict: true))
+}
+
+example parse_without_arguments_gives_the_defaults for parse {
+  parse(args: []) == Ok(value: defaults())
+}
+
+// "food=300.00" becomes a Budget. The limit may not be negative.
+pub fn parse_budget(given: String) -> Result<Budget, OptionError> {
+  match text.split_once(of: given, separator: "=") {
+    None => Err(error: OptionError.BadBudget(given: given)),
+    Some(value: pair) => {
+      let category = text.to_lower(of: text.trim(of: pair.before));
+      match money.parse(source: text.trim(of: pair.after)) {
+        Some(value: limit) => if text.is_empty(of: category)
+          or money.to_int(amount: limit) < 0 {
+          Err(error: OptionError.BadBudget(given: given))
+        } else {
+          Ok(value: Budget(category: category, limit: limit))
+        },
+        None => Err(error: OptionError.BadBudget(given: given)),
+      }
+    },
+  }
+}
+
+example parse_budget_cases for parse_budget {
+  parse_budget(given: "food=300.00")
+    == Ok(value: Budget(category: "food", limit: money.from_int(value: 30000)))
+    and parse_budget(given: "Travel = 80")
+      == Ok(
+        value: Budget(category: "travel", limit: money.from_int(value: 8000)),
+      )
+    and parse_budget(given: "food")
+      == Err(error: OptionError.BadBudget(given: "food"))
+    and parse_budget(given: "food=abc")
+      == Err(error: OptionError.BadBudget(given: "food=abc"))
+    and parse_budget(given: "=5")
+      == Err(error: OptionError.BadBudget(given: "=5"))
+    and parse_budget(given: "food=-5")
+      == Err(error: OptionError.BadBudget(given: "food=-5"))
+}
+
+// The arguments that are left, and the options read so far. Each step consumes one or
+// two arguments, so `rest.length` is the termination measure; `list.drop` promises the
+// shorter length in its own contract, which is what the verifier uses here.
+fn parse_from(
+  rest: List<String>,
+  options: Options,
+) -> Result<Options, OptionError> {
+  decreases rest.length;
+
+  if rest.length == 0 {
+    return Ok(value: options);
+  }
+  let name = rest[0];
+  if name == "--strict" {
+    return parse_from(
+      rest: list.drop(items: rest, count: 1),
+      options: Options.with(base: options, strict: true),
+    );
+  }
+  if rest.length < 2 {
+    return Err(error: lonely_name(name: name));
+  }
+  let updated = apply_option(options: options, name: name, given: rest[1])?;
+  parse_from(rest: list.drop(items: rest, count: 2), options: updated)
+}
+
+// The help text printed after an option error.
+pub fn usage() -> List<String> {
+  [
+    "usage: expense_report [options] < expenses.csv",
+    "  --month YYYY-MM            only expenses of that month",
+    "  --budget CATEGORY=AMOUNT   warn when a category exceeds its budget (repeatable)",
+    "  --top N                    list the N largest expenses (0 to 100, default 3)",
+    "  --strict                   exit with status 1 if the data had problems",
+  ]
+}
+
+example usage_starts_with_the_command for usage {
+  usage()[0] == "usage: expense_report [options] < expenses.csv"
+}

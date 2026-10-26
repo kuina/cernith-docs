@@ -100,7 +100,7 @@ Expressions are written in three kinds of places, and the elements available dif
 | Specification | `requires`, `ensures`, `decreases`, `invariant`, `where`, bodies of `spec fn` | Code, plus quantifiers, calls to a `spec fn`, `result`, and `self` |
 | Test | Bodies of `example` and `property` | Both code and specification |
 
-Writing a quantifier or a call to a `spec fn` in code is an error (`E0332`, `E0331`). Writing `result` outside `ensures`, or `self` outside `where`, is `E0313`. The syntax for specifications does not exist at run time.
+Writing a quantifier or a call to a `spec fn` in code is an error (`E0332`, `E0331`). Writing `result` outside `ensures`, or `self` outside `where`, is `E0313`. Specification syntax is not code, but a condition written with it that the checker has not proved is still evaluated when the program runs, quantifiers and calls to a `spec fn` included; a violation is a defect.
 
 ### Quantifiers
 

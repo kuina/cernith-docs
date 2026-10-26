@@ -1,0 +1,378 @@
+// Totals, rankings and budget checks over a list of valid expenses. Everything here is
+// pure and works on values: a `Map` is rebuilt by `map.insert` in a loop, and sorting
+// goes through `list.sort_by`, which is stable.
+module expense_report.aggregate;
+
+import expense_report.date as date;
+import expense_report.expense as expense;
+import expense_report.fixtures as fixtures;
+import expense_report.money as money;
+import expense_report.options as options;
+import std.int;
+import std.list;
+import std.map;
+import std.option;
+import std.set;
+
+// A budget that was exceeded, with the three numbers a warning needs.
+pub record Overspend {
+  category: String,
+  spent: money.Cents,
+  limit: money.Cents,
+  over: money.Cents,
+}
+
+// A name (a category or a month key) with the money that belongs to it.
+pub record Total {
+  name: String,
+  amount: money.Cents,
+}
+
+// The number of different categories that occur. A `Set` keeps each member once.
+pub fn category_count(records: List<expense.Expense>) -> Int {
+  set.size(
+    set: set.from_list(
+      items: list.map(
+        items: records,
+        apply: fn(item: expense.Expense) -> String {
+          item.category
+        },
+      ),
+    ),
+  )
+}
+
+example category_count_counts_distinct_names for category_count {
+  category_count(records: fixtures.sample_records(amounts: [1, 2, 3, 4, 5]))
+    == 3
+    and category_count(records: fixtures.sample_records(amounts: [1])) == 1
+    and category_count(records: []) == 0
+}
+
+// For every `amounts` list, the category totals add up to the grand total.
+pub fn category_sum_matches(amounts: List<Int>) -> Bool {
+  let records = fixtures.sample_records(amounts: amounts);
+  money.sum(
+    items: list.map(
+      items: category_totals(records: records),
+      apply: fn(item: Total) -> money.Cents {
+        item.amount
+      },
+    ),
+  )
+    == grand_total(records: records)
+}
+
+example category_sum_matches_cases for category_sum_matches {
+  category_sum_matches(amounts: [5, -2, 7, 100])
+    and category_sum_matches(amounts: [])
+}
+
+property category_totals_add_up_to_the_grand_total for category_sum_matches(
+  amounts: List<Int>,
+) {
+  category_sum_matches(amounts: amounts)
+}
+
+// Sum per category, largest first; equal sums are ordered by name.
+pub fn category_totals(records: List<expense.Expense>) -> List<Total> {
+  sort_largest_first(
+    totals: to_totals(
+      sums: sums_by(
+        records: records,
+        key_of: fn(item: expense.Expense) -> String {
+          item.category
+        },
+      ),
+    ),
+  )
+}
+
+example category_totals_rank_by_amount for category_totals {
+  names_of(
+    totals: category_totals(
+      records: fixtures.sample_records(amounts: [10, 50, 20, 10]),
+    ),
+  )
+    == ["travel", "food", "office"]
+}
+
+// The sum of every amount; refunds (negative amounts) reduce it.
+pub fn grand_total(records: List<expense.Expense>) -> money.Cents {
+  money.sum(
+    items: list.map(
+      items: records,
+      apply: fn(item: expense.Expense) -> money.Cents {
+        item.amount
+      },
+    ),
+  )
+}
+
+example grand_total_includes_refunds for grand_total {
+  grand_total(records: fixtures.sample_records(amounts: [100, -30, 5]))
+    == money.from_int(value: 75)
+    and grand_total(records: []) == money.from_int(value: 0)
+}
+
+// The expenses that fall into the month, or all of them when no month is given.
+pub fn in_month(
+  records: List<expense.Expense>,
+  month: Option<date.Month>,
+) -> List<expense.Expense> {
+  ensures result.length <= records.length;
+
+  match month {
+    None => records,
+    Some(value: wanted) => list.filter(
+      items: records,
+      keep: fn(item: expense.Expense) -> Bool {
+        date.same_month(date: item.date, month: wanted)
+      },
+    ),
+  }
+}
+
+example in_month_filters for in_month {
+  in_month(
+    records: fixtures.sample_records(amounts: [1, 2, 3]),
+    month: Some(value: date.Month(year: 2026, month: 2)),
+  ).length
+    == 1
+    and in_month(
+      records: fixtures.sample_records(amounts: [1, 2, 3]),
+      month: None,
+    ).length
+      == 3
+}
+
+// True when no element is smaller than the one after it.
+pub fn is_non_increasing(items: List<Int>) -> Bool {
+  var ordered: Bool = true;
+  for index in 1..items.length {
+    if items[index - 1] < items[index] {
+      ordered = false;
+    }
+  }
+  ordered
+}
+
+example is_non_increasing_cases for is_non_increasing {
+  is_non_increasing(items: [5, 5, 3])
+    and is_non_increasing(items: [])
+    and not is_non_increasing(items: [1, 2])
+}
+
+// The `count` biggest expenses. Ties keep the order of the input, because the sort is
+// stable. A count above the number of records returns all of them.
+pub fn largest(
+  records: List<expense.Expense>,
+  count: Int,
+) -> List<expense.Expense> {
+  requires count >= 0;
+  ensures result.length <= count;
+  ensures result.length <= records.length;
+
+  let ranked = list.sort_by(
+    items: records,
+    less_than: fn(first: expense.Expense, second: expense.Expense) -> Bool {
+      money.greater(first: first.amount, second: second.amount)
+    },
+  );
+  list.take(items: ranked, count: int.min(first: count, second: ranked.length))
+}
+
+example largest_takes_the_biggest for largest {
+  fixtures.amounts_of(
+    records: largest(
+      records: fixtures.sample_records(amounts: [5, 90, 7, 40]),
+      count: 2,
+    ),
+  )
+    == [90, 40]
+    and largest(
+      records: fixtures.sample_records(amounts: [5, 6]),
+      count: 9,
+    ).length
+      == 2
+    and largest(records: fixtures.sample_records(amounts: [5, 6]), count: 0)
+      == []
+}
+
+// The amounts of the largest expenses never increase from one position to the next.
+pub fn largest_are_ranked(amounts: List<Int>, count: Int) -> Bool {
+  requires count >= 0;
+
+  let top = largest(
+    records: fixtures.sample_records(amounts: amounts),
+    count: count,
+  );
+  is_non_increasing(items: fixtures.amounts_of(records: top))
+    and top.length == int.min(first: count, second: amounts.length)
+}
+
+example largest_are_ranked_cases for largest_are_ranked {
+  largest_are_ranked(amounts: [3, 9, 4], count: 2)
+    and largest_are_ranked(amounts: [], count: 5)
+}
+
+property largest_are_sorted_downwards for largest_are_ranked(
+  amounts: List<Int>,
+  count: Int,
+) {
+  requires count >= 0;
+
+  largest_are_ranked(amounts: amounts, count: count)
+}
+
+// Sum per month, oldest first. The keys look like "2026-10", which sort in time order.
+pub fn month_totals(records: List<expense.Expense>) -> List<Total> {
+  to_totals(
+    sums: sums_by(
+      records: records,
+      key_of: fn(item: expense.Expense) -> String {
+        date.format_month(month: date.month_of(date: item.date))
+      },
+    ),
+  )
+}
+
+example month_totals_are_oldest_first for month_totals {
+  names_of(
+    totals: month_totals(
+      records: fixtures.sample_records(amounts: [1, 2, 3, 4]),
+    ),
+  )
+    == ["2026-01", "2026-02", "2026-03", "2026-04"]
+}
+
+// For readable examples.
+pub fn names_of(totals: List<Total>) -> List<String> {
+  list.map(
+    items: totals,
+    apply: fn(item: Total) -> String {
+      item.name
+    },
+  )
+}
+
+// The categories whose total is above their budget, in the order the budgets were
+// given. A category with no expenses has spent nothing and cannot be over.
+pub fn overspends(
+  totals: List<Total>,
+  budgets: List<options.Budget>,
+) -> List<Overspend> {
+  var found: List<Overspend> = [];
+  for budget in budgets {
+    let spent = spent_in(totals: totals, category: budget.category);
+    if money.greater(first: spent, second: budget.limit) {
+      found = found
+        ++ [
+          Overspend(
+            category: budget.category,
+            spent: spent,
+            limit: budget.limit,
+            over: money.difference(first: spent, second: budget.limit),
+          ),
+        ];
+    }
+  }
+  found
+}
+
+example overspends_lists_only_the_exceeded_budgets for overspends {
+  overspends(
+    totals: [
+      Total(name: "food", amount: money.from_int(value: 34050)),
+      Total(name: "travel", amount: money.from_int(value: 5000)),
+    ],
+    budgets: [
+      options.Budget(category: "food", limit: money.from_int(value: 30000)),
+      options.Budget(category: "travel", limit: money.from_int(value: 5000)),
+      options.Budget(category: "office", limit: money.from_int(value: 100)),
+    ],
+  )
+    == [
+      Overspend(
+        category: "food",
+        spent: money.from_int(value: 34050),
+        limit: money.from_int(value: 30000),
+        over: money.from_int(value: 4050),
+      ),
+    ]
+}
+
+// Largest first; the name decides between equal amounts, so the order is total.
+fn sort_largest_first(totals: List<Total>) -> List<Total> {
+  list.sort_by(
+    items: totals,
+    less_than: fn(first: Total, second: Total) -> Bool {
+      money.greater(first: first.amount, second: second.amount)
+        or (first.amount == second.amount and first.name < second.name)
+    },
+  )
+}
+
+example sort_largest_first_breaks_ties_by_name for sort_largest_first {
+  names_of(
+    totals: sort_largest_first(
+      totals: [
+        Total(name: "b", amount: money.from_int(value: 5)),
+        Total(name: "a", amount: money.from_int(value: 5)),
+        Total(name: "c", amount: money.from_int(value: 9)),
+      ],
+    ),
+  )
+    == ["c", "a", "b"]
+}
+
+// The sum of a name in a list of totals; zero when the name is not there.
+fn spent_in(totals: List<Total>, category: String) -> money.Cents {
+  match list.find(
+    items: totals,
+    test: fn(item: Total) -> Bool {
+      item.name == category
+    },
+  ) {
+    Some(value: found) => found.amount,
+    None => money.from_int(value: 0),
+  }
+}
+
+example spent_in_defaults_to_zero for spent_in {
+  spent_in(
+    totals: [Total(name: "food", amount: money.from_int(value: 5))],
+    category: "travel",
+  )
+    == money.from_int(value: 0)
+}
+
+// Money per name as a Map. `option.unwrap_or` gives the starting sum of a new name.
+fn sums_by(
+  records: List<expense.Expense>,
+  key_of: fn(item: expense.Expense) -> String,
+) -> map.Map<String, money.Cents> {
+  var sums: map.Map<String, money.Cents> = map.empty();
+  for record_item in records {
+    let key = key_of(item: record_item);
+    let before = option.unwrap_or(
+      option: map.get(map: sums, key: key),
+      default: money.from_int(value: 0),
+    );
+    sums = map.insert(
+      map: sums,
+      key: key,
+      value: money.add(first: before, second: record_item.amount),
+    );
+  }
+  sums
+}
+
+fn to_totals(sums: map.Map<String, money.Cents>) -> List<Total> {
+  list.map(
+    items: map.entries(map: sums),
+    apply: fn(item: map.Entry<String, money.Cents>) -> Total {
+      Total(name: item.key, amount: item.value)
+    },
+  )
+}

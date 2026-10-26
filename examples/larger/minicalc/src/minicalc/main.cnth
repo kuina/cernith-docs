@@ -1,0 +1,93 @@
+// Sample: minicalc, a line calculator with variables
+// Shows: a multi-module package, a pure core (lexer, parser, evaluator, session) behind a thin io shell, recursion with decreases, structural recursion, errors as values, contracts the verifier proves
+// Chapter: language/14-modules-and-packages.md
+// Run: cernith run examples/larger/minicalc < examples/larger/minicalc/run.stdin
+module minicalc.main;
+
+import minicalc.session as session;
+import std.io;
+import std.test;
+
+// The shell. It reads all the input lines, hands them to the pure session, and prints
+// what comes back. Anything wrong with the *calculation* was already turned into
+// output lines by the session; only a failure of the input or output itself (a closed
+// pipe, say) makes the program exit with status 1.
+pub fn main(args: List<String>) -> Int uses io {
+  match run() {
+    Ok(value: _) => 0,
+    Err(error: _) => 1,
+  }
+}
+
+// `uses io` appears here and in `main` and nowhere else in the package: the compiler
+// checks that no other function can read or print.
+pub fn run() -> Result<Unit, io.IoError> uses io {
+  let lines = io.read_all_lines()?;
+  for line in session.run_all(lines: lines) {
+    io.write_line(text: line)?;
+  }
+  Ok(value: ())
+}
+
+example run_keeps_going_after_an_error for run {
+  test.with_world(
+    world: test.World(
+      input: ["total = 10 / (5 - 5)", "total", "2 ^ 10"],
+      now_ms: 0,
+      seed: 0,
+    ),
+    run: fn() -> Result<Unit, io.IoError> uses io {
+      run()
+    },
+  ).output
+    == [
+      "error at column 12: division by zero",
+      "total = 10 / (5 - 5)",
+      "           ^",
+      "error at column 1: unknown variable `total`",
+      "total",
+      "^",
+      "1024",
+    ]
+}
+
+example run_lists_variables_sorted_by_name for run {
+  test.with_world(
+    world: test.World(
+      input: ["b = 2", "a = max(b, 7)", ":vars"],
+      now_ms: 0,
+      seed: 0,
+    ),
+    run: fn() -> Result<Unit, io.IoError> uses io {
+      run()
+    },
+  ).output
+    == ["b = 2", "a = 7", "a = 7", "b = 2"]
+}
+
+// test.with_world runs `run` against a simulated world: `input` is what standard input
+// would deliver, and `output` collects what was written. These are the end-to-end
+// examples: whole sessions, input lines in, output lines out.
+example run_prints_one_result_per_line for run {
+  test.with_world(
+    world: test.World(
+      input: ["1 + 2 * 3", "x = 4 * (2 + 1)", "x - 2", ""],
+      now_ms: 0,
+      seed: 0,
+    ),
+    run: fn() -> Result<Unit, io.IoError> uses io {
+      run()
+    },
+  ).output
+    == ["7", "x = 12", "10"]
+}
+
+example run_succeeds_even_when_every_line_is_wrong for run {
+  test.with_world(
+    world: test.World(input: ["?", "(", ")"], now_ms: 0, seed: 0),
+    run: fn() -> Result<Unit, io.IoError> uses io {
+      run()
+    },
+  ).value
+    == Ok(value: ())
+}

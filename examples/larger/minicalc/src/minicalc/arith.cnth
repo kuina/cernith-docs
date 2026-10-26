@@ -1,0 +1,158 @@
+// Arithmetic: the six binary operators on unbounded integers. This module knows nothing
+// about source text or columns; the evaluator attaches the column to an error.
+// Failures are values of `ArithError`, never defects: a division by zero typed by a user
+// must not stop the session, so the divisor is checked before `int.div_floor` (whose
+// `requires divisor != 0` would turn it into a defect).
+module minicalc.arith;
+
+import minicalc.ast as ast;
+import std.int;
+
+pub variant ArithError {
+  DivisionByZero,
+  ExponentTooLarge,
+  NegativeExponent,
+}
+
+// `^` refuses larger exponents: `9 ^ 9 ^ 9` would otherwise run (and use memory) for a
+// very long time on unbounded integers.
+pub const max_exponent: Int = 1000;
+
+// Applies one binary operator to two values. Division and remainder round down
+// (`div_floor`, `rem_floor`), so the remainder has the sign of the divisor and
+// `a == (a / b) * b + a % b` always holds.
+//
+// The contract states what must hold, not how it is computed: the three total operators
+// are exact, and a zero divisor is always an error and never a defect.
+pub fn apply(op: ast.BinOp, left: Int, right: Int) -> Result<Int, ArithError> {
+  ensures match op {
+    ast.BinOp.Add => result == Ok(value: left + right),
+    ast.BinOp.Sub => result == Ok(value: left - right),
+    ast.BinOp.Mul => result == Ok(value: left * right),
+    ast.BinOp.Div => right == 0
+      implies result == Err(error: ArithError.DivisionByZero),
+    ast.BinOp.Mod => right == 0
+      implies result == Err(error: ArithError.DivisionByZero),
+    ast.BinOp.Pow => right < 0
+      implies result == Err(error: ArithError.NegativeExponent),
+  };
+
+  match op {
+    ast.BinOp.Add => Ok(value: left + right),
+    ast.BinOp.Sub => Ok(value: left - right),
+    ast.BinOp.Mul => Ok(value: left * right),
+    ast.BinOp.Div => if right == 0 {
+      Err(error: ArithError.DivisionByZero)
+    } else {
+      Ok(value: int.div_floor(dividend: left, divisor: right))
+    },
+    ast.BinOp.Mod => if right == 0 {
+      Err(error: ArithError.DivisionByZero)
+    } else {
+      Ok(value: int.rem_floor(dividend: left, divisor: right))
+    },
+    ast.BinOp.Pow => if right < 0 {
+      Err(error: ArithError.NegativeExponent)
+    } else if right > max_exponent {
+      Err(error: ArithError.ExponentTooLarge)
+    } else {
+      Ok(value: raise(base: left, exponent: right))
+    },
+  }
+}
+
+example apply_reports_bad_operands for apply {
+  apply(op: ast.BinOp.Div, left: 1, right: 0)
+    == Err(error: ArithError.DivisionByZero)
+    and apply(op: ast.BinOp.Mod, left: 1, right: 0)
+      == Err(error: ArithError.DivisionByZero)
+    and apply(op: ast.BinOp.Pow, left: 2, right: -1)
+      == Err(error: ArithError.NegativeExponent)
+    and apply(op: ast.BinOp.Pow, left: 2, right: 1001)
+      == Err(error: ArithError.ExponentTooLarge)
+    and apply(op: ast.BinOp.Pow, left: 2, right: 10) == Ok(value: 1024)
+}
+
+example apply_rounds_division_down for apply {
+  apply(op: ast.BinOp.Div, left: 7, right: 2) == Ok(value: 3)
+    and apply(op: ast.BinOp.Div, left: -7, right: 2) == Ok(value: -4)
+    and apply(op: ast.BinOp.Div, left: 7, right: -2) == Ok(value: -4)
+    and apply(op: ast.BinOp.Mod, left: -7, right: 2) == Ok(value: 1)
+    and apply(op: ast.BinOp.Mod, left: 7, right: -2) == Ok(value: -1)
+}
+
+// Floor division and remainder together give back the dividend: the law that makes
+// "round down" a consistent choice. The remainder also lies between zero and the divisor.
+property division_and_remainder_recombine for apply(
+  dividend: Int,
+  divisor: Int,
+) {
+  requires divisor != 0;
+
+  match apply(op: ast.BinOp.Div, left: dividend, right: divisor) {
+    Ok(value: quotient) => match apply(
+      op: ast.BinOp.Mod,
+      left: dividend,
+      right: divisor,
+    ) {
+      Ok(value: remainder) => quotient * divisor + remainder == dividend
+        and (
+          remainder == 0
+            or (remainder > 0 and divisor > 0)
+            or (remainder < 0 and divisor < 0)
+        ),
+      Err(error: _) => false,
+    },
+    Err(error: _) => false,
+  }
+}
+
+// The operators agree with the integers they are built on.
+property operators_match_the_integer_operators for apply(
+  first: Int,
+  second: Int,
+) {
+  apply(op: ast.BinOp.Add, left: first, right: second)
+    == Ok(value: first + second)
+    and apply(op: ast.BinOp.Sub, left: first, right: second)
+      == Ok(value: first - second)
+    and apply(op: ast.BinOp.Mul, left: first, right: second)
+      == Ok(value: first * second)
+}
+
+// Powers add up: `b ^ (m + n) == b ^ m * b ^ n`. The exponents are made small and
+// non-negative from the arguments, so that no generated input is thrown away.
+property powers_add_their_exponents for apply(
+  base: Int,
+  first: Int,
+  second: Int,
+) {
+  let m = int.rem_euclid(dividend: first, divisor: 21);
+  let n = int.rem_euclid(dividend: second, divisor: 21);
+  match apply(op: ast.BinOp.Pow, left: base, right: m + n) {
+    Ok(value: whole) => match apply(op: ast.BinOp.Pow, left: base, right: m) {
+      Ok(value: head) => match apply(op: ast.BinOp.Pow, left: base, right: n) {
+        Ok(value: tail) => whole == head * tail,
+        Err(error: _) => false,
+      },
+      Err(error: _) => false,
+    },
+    Err(error: _) => false,
+  }
+}
+
+// `base ^ exponent` with the exponent already checked. The call to `int.pow` sits in its
+// own function on purpose: its contract is stated with a recursive `spec fn`, which the
+// verifier does not encode yet, and a function that calls it stays "typed" only. Here
+// that is this one-line function and not `apply`, whose contract is proved.
+fn raise(base: Int, exponent: Int) -> Int {
+  requires exponent >= 0 and exponent <= max_exponent;
+
+  int.pow(base: base, exponent: exponent)
+}
+
+example raise_is_repeated_multiplication for raise {
+  raise(base: 3, exponent: 4) == 81
+    and raise(base: -2, exponent: 3) == -8
+    and raise(base: 0, exponent: 0) == 1
+}

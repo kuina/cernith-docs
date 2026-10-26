@@ -1,0 +1,293 @@
+// Evaluator: runs a syntax tree against an environment of variables.
+// Everything here is pure. Failures are values of `EvalError`, never defects: a bad
+// program typed by the user must not stop the session. The arithmetic itself lives in
+// `minicalc.arith`; this module adds the columns and the variables and functions.
+module minicalc.eval;
+
+import minicalc.arith as arith;
+import minicalc.ast as ast;
+import std.int;
+import std.map;
+import std.result;
+
+pub variant EvalError {
+  Arithmetic(error: arith.ArithError, column: Int),
+  UnknownFunction(name: String, column: Int),
+  UnknownVariable(name: String, column: Int),
+  WrongArgumentCount(name: String, column: Int, expected: Int, given: Int),
+}
+
+// How many arguments a built-in function takes, or None if there is no such function.
+pub fn arity(name: String) -> Option<Int> {
+  match name {
+    "abs" => Some(value: 1),
+    "gcd" => Some(value: 2),
+    "max" => Some(value: 2),
+    "min" => Some(value: 2),
+    _ => None,
+  }
+}
+
+example arity_lists_the_built_in_functions for arity {
+  arity(name: "abs") == Some(value: 1)
+    and arity(name: "gcd") == Some(value: 2)
+    and arity(name: "sqrt") == None
+}
+
+// Evaluates a tree. The recursion is on the parts of `expr` (the operands of a node), so
+// it is structural and needs no `decreases`. The operands are evaluated left to right,
+// and the first error wins; there is no short-circuiting because there are no booleans.
+pub fn evaluate(
+  env: map.Map<String, Int>,
+  expr: ast.Expr,
+) -> Result<Int, EvalError> {
+  match expr {
+    ast.Expr.BadCall(name: name, column: column, count: count) => Err(
+      error: function_error(name: name, column: column, given: count),
+    ),
+    ast.Expr.Binary(op: op, column: column, left: left, right: right) => {
+      let first = evaluate(env: env, expr: left)?;
+      let second = evaluate(env: env, expr: right)?;
+      result.map_error(
+        outcome: arith.apply(op: op, left: first, right: second),
+        apply: fn(failure: arith.ArithError) -> EvalError {
+          EvalError.Arithmetic(error: failure, column: column)
+        },
+      )
+    },
+    ast.Expr.Call1(
+      name: name,
+      column: column,
+      argument: argument,
+    ) => match name {
+      "abs" => {
+        let value = evaluate(env: env, expr: argument)?;
+        Ok(value: int.abs(value: value))
+      },
+      _ => Err(error: function_error(name: name, column: column, given: 1)),
+    },
+    ast.Expr.Call2(
+      name: name,
+      column: column,
+      first: first,
+      second: second,
+    ) => match name {
+      "gcd" => {
+        let left = evaluate(env: env, expr: first)?;
+        let right = evaluate(env: env, expr: second)?;
+        Ok(value: int.gcd(first: left, second: right))
+      },
+      "max" => {
+        let left = evaluate(env: env, expr: first)?;
+        let right = evaluate(env: env, expr: second)?;
+        Ok(value: int.max(first: left, second: right))
+      },
+      "min" => {
+        let left = evaluate(env: env, expr: first)?;
+        let right = evaluate(env: env, expr: second)?;
+        Ok(value: int.min(first: left, second: right))
+      },
+      _ => Err(error: function_error(name: name, column: column, given: 2)),
+    },
+    ast.Expr.Neg(operand: operand) => {
+      let value = evaluate(env: env, expr: operand)?;
+      Ok(value: 0 - value)
+    },
+    ast.Expr.Num(value: value) => Ok(value: value),
+    ast.Expr.Var(name: name, column: column) => match map.get(
+      map: env,
+      key: name,
+    ) {
+      Some(value: value) => Ok(value: value),
+      None => Err(error: EvalError.UnknownVariable(name: name, column: column)),
+    },
+  }
+}
+
+example evaluate_does_arithmetic_and_calls for evaluate {
+  evaluate(
+    env: sample_env(),
+    expr: sum(
+      first: ast.Expr.Var(name: "x", column: 1),
+      second: ast.Expr.Neg(operand: ast.Expr.Num(value: 2)),
+    ),
+  )
+    == Ok(value: 3)
+    and evaluate(
+      env: sample_env(),
+      expr: ast.Expr.Call2(
+        name: "gcd",
+        column: 1,
+        first: ast.Expr.Num(value: 12),
+        second: ast.Expr.Var(name: "x", column: 8),
+      ),
+    )
+      == Ok(value: 1)
+    and evaluate(
+      env: sample_env(),
+      expr: ast.Expr.Call1(
+        name: "abs",
+        column: 1,
+        argument: ast.Expr.Num(value: -9),
+      ),
+    )
+      == Ok(value: 9)
+}
+
+example evaluate_reports_names_and_counts_that_do_not_fit for evaluate {
+  evaluate(env: sample_env(), expr: ast.Expr.Var(name: "y", column: 4))
+    == Err(error: EvalError.UnknownVariable(name: "y", column: 4))
+    and evaluate(
+      env: sample_env(),
+      expr: ast.Expr.Call1(
+        name: "sqrt",
+        column: 2,
+        argument: ast.Expr.Num(value: 4),
+      ),
+    )
+      == Err(error: EvalError.UnknownFunction(name: "sqrt", column: 2))
+    and evaluate(
+      env: sample_env(),
+      expr: ast.Expr.Call1(
+        name: "max",
+        column: 1,
+        argument: ast.Expr.Num(value: 4),
+      ),
+    )
+      == Err(
+        error: EvalError.WrongArgumentCount(
+          name: "max",
+          column: 1,
+          expected: 2,
+          given: 1,
+        ),
+      )
+    and evaluate(
+      env: sample_env(),
+      expr: ast.Expr.BadCall(name: "abs", column: 1, count: 3),
+    )
+      == Err(
+        error: EvalError.WrongArgumentCount(
+          name: "abs",
+          column: 1,
+          expected: 1,
+          given: 3,
+        ),
+      )
+}
+
+example evaluate_stops_at_the_first_error_from_the_left for evaluate {
+  evaluate(
+    env: sample_env(),
+    expr: sum(
+      first: ast.Expr.Var(name: "a", column: 1),
+      second: ast.Expr.Var(name: "b", column: 5),
+    ),
+  )
+    == Err(error: EvalError.UnknownVariable(name: "a", column: 1))
+}
+
+property gcd_laws for evaluate(first: Int, second: Int) {
+  match evaluate(
+    env: sample_env(),
+    expr: ast.Expr.Call2(
+      name: "gcd",
+      column: 1,
+      first: ast.Expr.Num(value: first),
+      second: ast.Expr.Num(value: second),
+    ),
+  ) {
+    Ok(value: divisor) => divisor >= 0
+      and (
+        divisor == 0
+          or (
+            int.rem_euclid(dividend: first, divisor: divisor) == 0
+              and int.rem_euclid(dividend: second, divisor: divisor) == 0
+          )
+      ),
+    Err(error: _) => false,
+  }
+}
+
+property min_and_max_pick_the_ends for evaluate(first: Int, second: Int) {
+  match evaluate(
+    env: sample_env(),
+    expr: ast.Expr.Call2(
+      name: "min",
+      column: 1,
+      first: ast.Expr.Num(value: first),
+      second: ast.Expr.Num(value: second),
+    ),
+  ) {
+    Ok(value: low) => match evaluate(
+      env: sample_env(),
+      expr: ast.Expr.Call2(
+        name: "max",
+        column: 1,
+        first: ast.Expr.Num(value: first),
+        second: ast.Expr.Num(value: second),
+      ),
+    ) {
+      Ok(value: high) => low <= high and low + high == first + second,
+      Err(error: _) => false,
+    },
+    Err(error: _) => false,
+  }
+}
+
+fn function_error(name: String, column: Int, given: Int) -> EvalError {
+  match arity(name: name) {
+    Some(value: expected) => EvalError.WrongArgumentCount(
+      name: name,
+      column: column,
+      expected: expected,
+      given: given,
+    ),
+    None => EvalError.UnknownFunction(name: name, column: column),
+  }
+}
+
+example function_error_tells_a_missing_function_from_a_wrong_count for function_error {
+  function_error(name: "min", column: 1, given: 3)
+    == EvalError.WrongArgumentCount(
+      name: "min",
+      column: 1,
+      expected: 2,
+      given: 3,
+    )
+    and function_error(name: "nope", column: 1, given: 3)
+      == EvalError.UnknownFunction(name: "nope", column: 1)
+}
+
+// True for the names of the built-in functions. The session uses it to refuse
+// `abs = 3`: assigning to a function name would make the variable unreachable.
+pub fn is_function(name: String) -> Bool {
+  match arity(name: name) {
+    Some(value: _) => true,
+    None => false,
+  }
+}
+
+example is_function_knows_the_built_ins for is_function {
+  is_function(name: "min") and not is_function(name: "minimum")
+}
+
+// A binary node over two number leaves.
+fn node(op: ast.BinOp, first: Int, second: Int) -> ast.Expr {
+  ast.Expr.Binary(
+    op: op,
+    column: 1,
+    left: ast.Expr.Num(value: first),
+    right: ast.Expr.Num(value: second),
+  )
+}
+
+// The environment used by the examples: one variable, x = 5.
+fn sample_env() -> map.Map<String, Int> {
+  map.insert(map: map.empty(), key: "x", value: 5)
+}
+
+// The addition of two trees, for building examples and properties without noise.
+fn sum(first: ast.Expr, second: ast.Expr) -> ast.Expr {
+  ast.Expr.Binary(op: ast.BinOp.Add, column: 3, left: first, right: second)
+}

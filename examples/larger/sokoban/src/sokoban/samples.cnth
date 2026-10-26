@@ -1,0 +1,56 @@
+// Small fixed puzzles for examples and properties.
+// Examples cannot hold a `let`, and building a Level needs a parse, so the other modules
+// share these three ready-made levels instead of repeating their text. Each function
+// returns an Option because `level.parse` returns a Result; the examples here show that
+// all three parse, so a caller that gets None has found a broken fixture.
+module sokoban.samples;
+
+import sokoban.level;
+import sokoban.point;
+import std.result;
+
+// A long hall with a wall at both ends: two boxes in a row in front of the player,
+// two goals at the far end. Pushing the first box is blocked by the second.
+pub fn corridor() -> Option<level.Level> {
+  result.ok(outcome: level.parse(rows: ["#@$$..#"]))
+}
+
+example the_corridor_parses for corridor {
+  match corridor() {
+    Some(value: puzzle) => puzzle.boxes.length == 2
+      and puzzle.goals.length == 2,
+    None => false,
+  }
+}
+
+// An open room with two boxes and two goals, big enough for random walks to push things.
+pub fn room() -> Option<level.Level> {
+  result.ok(
+    outcome: level.parse(
+      rows: ["#######", "#     #", "# $.@ #", "#  $. #", "#     #", "#######"],
+    ),
+  )
+}
+
+example the_room_parses for room {
+  match room() {
+    Some(value: puzzle) => puzzle.player == point.Point(row: 2, col: 4)
+      and puzzle.boxes
+        == [point.Point(row: 2, col: 2), point.Point(row: 3, col: 3)]
+      and puzzle.goals
+        == [point.Point(row: 2, col: 3), point.Point(row: 3, col: 4)],
+    None => false,
+  }
+}
+
+// The smallest interesting puzzle: one push to the right solves it.
+pub fn tiny() -> Option<level.Level> {
+  result.ok(outcome: level.parse(rows: ["#####", "#@$.#", "#####"]))
+}
+
+example the_tiny_level_parses for tiny {
+  match tiny() {
+    Some(value: puzzle) => puzzle.boxes == [point.Point(row: 1, col: 2)],
+    None => false,
+  }
+}

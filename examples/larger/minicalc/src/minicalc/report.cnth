@@ -1,0 +1,226 @@
+// Reports: turns the errors of the three stages (lexer, parser, evaluator) into the text
+// the user sees. Each stage has its own error variant; this module is the one place that
+// knows how they read, and how to point at a column of the source line.
+module minicalc.report;
+
+import minicalc.arith as arith;
+import minicalc.eval as eval;
+import minicalc.parser as parser;
+import minicalc.token as token;
+import std.int;
+import std.text;
+
+// What goes wrong, and where. Columns count from 1. The `where` clause is part of the
+// type, so `render` can rely on it without a check of its own.
+pub record Diagnostic {
+  column: Int,
+  message: String,
+} where column >= 1;
+
+// The words for the arithmetic errors, as they appear in the message.
+fn arith_message(error: arith.ArithError) -> String {
+  match error {
+    arith.ArithError.DivisionByZero => "division by zero",
+    arith.ArithError.ExponentTooLarge => "exponent too large (the limit is "
+      ++ int.to_text(value: arith.max_exponent)
+      ++ ")",
+    arith.ArithError.NegativeExponent => "negative exponent",
+  }
+}
+
+example arith_message_words_each_arithmetic_error for arith_message {
+  arith_message(error: arith.ArithError.DivisionByZero) == "division by zero"
+    and arith_message(error: arith.ArithError.NegativeExponent)
+      == "negative exponent"
+    and arith_message(error: arith.ArithError.ExponentTooLarge)
+      == "exponent too large (the limit is 1000)"
+}
+
+// The diagnostic for assigning to a built-in function name. The session finds this one
+// out; no stage has an error variant for it.
+pub fn assign_to_function(name: String, column: Int) -> Diagnostic {
+  make(
+    column: column,
+    message: "cannot assign to the function `" ++ name ++ "`",
+  )
+}
+
+example assign_to_function_names_the_function for assign_to_function {
+  assign_to_function(name: "abs", column: 1).message
+    == "cannot assign to the function `abs`"
+}
+
+// "1 argument", "2 arguments".
+fn count_of(count: Int, noun: String) -> String {
+  if count == 1 {
+    int.to_text(value: count) ++ " " ++ noun
+  } else {
+    int.to_text(value: count) ++ " " ++ noun ++ "s"
+  }
+}
+
+example count_of_pluralizes for count_of {
+  count_of(count: 1, noun: "argument") == "1 argument"
+    and count_of(count: 2, noun: "argument") == "2 arguments"
+    and count_of(count: 0, noun: "argument") == "0 arguments"
+}
+
+pub fn from_eval(error: eval.EvalError) -> Diagnostic {
+  match error {
+    eval.EvalError.Arithmetic(error: failure, column: column) => make(
+      column: column,
+      message: arith_message(error: failure),
+    ),
+    eval.EvalError.UnknownFunction(name: name, column: column) => make(
+      column: column,
+      message: "unknown function `" ++ name ++ "`",
+    ),
+    eval.EvalError.UnknownVariable(name: name, column: column) => make(
+      column: column,
+      message: "unknown variable `" ++ name ++ "`",
+    ),
+    eval.EvalError.WrongArgumentCount(
+      name: name,
+      column: column,
+      expected: expected,
+      given: given,
+    ) => make(
+      column: column,
+      message: "`"
+        ++ name
+        ++ "` takes "
+        ++ count_of(count: expected, noun: "argument")
+        ++ ", got "
+        ++ int.to_text(value: given),
+    ),
+  }
+}
+
+example from_eval_words_every_evaluation_error for from_eval {
+  from_eval(
+    error: eval.EvalError.Arithmetic(
+      error: arith.ArithError.DivisionByZero,
+      column: 3,
+    ),
+  )
+    == Diagnostic(column: 3, message: "division by zero")
+    and from_eval(
+      error: eval.EvalError.WrongArgumentCount(
+        name: "min",
+        column: 1,
+        expected: 2,
+        given: 1,
+      ),
+    )
+      == Diagnostic(column: 1, message: "`min` takes 2 arguments, got 1")
+    and from_eval(
+      error: eval.EvalError.WrongArgumentCount(
+        name: "abs",
+        column: 1,
+        expected: 1,
+        given: 2,
+      ),
+    )
+      == Diagnostic(column: 1, message: "`abs` takes 1 argument, got 2")
+}
+
+pub fn from_lex(error: token.LexError) -> Diagnostic {
+  match error {
+    token.LexError.UnexpectedCharacter(
+      character: character,
+      column: column,
+    ) => make(
+      column: column,
+      message: "unexpected character `" ++ character ++ "`",
+    ),
+  }
+}
+
+example from_lex_quotes_the_character for from_lex {
+  from_lex(error: token.LexError.UnexpectedCharacter(character: "$", column: 5))
+    == Diagnostic(column: 5, message: "unexpected character `$`")
+}
+
+pub fn from_parse(error: parser.ParseError) -> Diagnostic {
+  match error {
+    parser.ParseError.MissingParen(column: column) => make(
+      column: column,
+      message: "missing `)`",
+    ),
+    parser.ParseError.UnexpectedEnd(column: column) => make(
+      column: column,
+      message: "unexpected end of input",
+    ),
+    parser.ParseError.UnexpectedToken(column: column, text: found) => make(
+      column: column,
+      message: "unexpected `" ++ found ++ "`",
+    ),
+  }
+}
+
+example from_parse_words_every_syntax_error for from_parse {
+  from_parse(error: parser.ParseError.MissingParen(column: 9))
+    == Diagnostic(column: 9, message: "missing `)`")
+    and from_parse(error: parser.ParseError.UnexpectedEnd(column: 4))
+      == Diagnostic(column: 4, message: "unexpected end of input")
+    and from_parse(
+      error: parser.ParseError.UnexpectedToken(column: 3, text: "2"),
+    )
+      == Diagnostic(column: 3, message: "unexpected `2`")
+}
+
+// A diagnostic whose column is at least 1, whatever the stage reported. A stage that
+// counted from 0 by mistake would be shown at column 1 instead of breaking `render`.
+fn make(column: Int, message: String) -> Diagnostic {
+  ensures result.column >= 1 and result.message == message;
+
+  Diagnostic(column: int.max(first: 1, second: column), message: message)
+}
+
+example make_never_goes_below_column_one for make {
+  make(column: 0, message: "m").column == 1
+    and make(column: -4, message: "m").column == 1
+    and make(column: 6, message: "m").column == 6
+}
+
+// Three lines: the message, the source line as it was typed, and a caret under the
+// column. The caret line is `column - 1` spaces and a `^`, so its length is `column`.
+// (A tab in the source would shift the caret on a terminal; the line is not rewritten.)
+pub fn render(source: String, diagnostic: Diagnostic) -> List<String> {
+  ensures result.length == 3
+    and result[1] == source
+    and result[2].length == diagnostic.column;
+
+  [
+    "error at column "
+      ++ int.to_text(value: diagnostic.column)
+      ++ ": "
+      ++ diagnostic.message,
+    source,
+    text.repeat(of: " ", count: diagnostic.column - 1) ++ "^",
+  ]
+}
+
+example render_points_at_the_column for render {
+  render(
+    source: "1 + $2",
+    diagnostic: Diagnostic(column: 5, message: "unexpected character `$`"),
+  )
+    == ["error at column 5: unexpected character `$`", "1 + $2", "    ^"]
+}
+
+property the_caret_is_under_the_column for render(
+  source: String,
+  column: Int,
+  message: String,
+) {
+  requires column >= 1 and column <= 200;
+
+  let lines = render(
+    source: source,
+    diagnostic: Diagnostic(column: column, message: message),
+  );
+  lines[2].length == column
+    and text.slice(of: lines[2], from: column - 1, to: column) == "^"
+    and lines[1] == source
+}

@@ -1,0 +1,92 @@
+// Table columns: a column is as wide as its widest cell, found by `widest` and applied
+// by `align_left` and `align_right` with `text.pad_end` and `text.pad_start`. The report
+// module builds its tables from these, so no width is written down anywhere.
+module expense_report.table;
+
+import std.int;
+import std.list;
+import std.text;
+
+// Pads every cell on the right to the width of the widest one: a left-aligned column.
+pub fn align_left(cells: List<String>) -> List<String> {
+  ensures result.length == cells.length;
+
+  let width = widest(cells: cells);
+  var padded: List<String> = [];
+  for index in 0..cells.length {
+    invariant padded.length == index;
+
+    padded = padded
+      ++ [text.pad_end(of: cells[index], width: width, fill: " ")];
+  }
+  padded
+}
+
+example align_left_pads_to_the_widest for align_left {
+  align_left(cells: ["a", "abc", ""]) == ["a  ", "abc", "   "]
+    and align_left(cells: []) == []
+}
+
+// Pads every cell on the left: a right-aligned column, as for money.
+pub fn align_right(cells: List<String>) -> List<String> {
+  ensures result.length == cells.length;
+
+  let width = widest(cells: cells);
+  var padded: List<String> = [];
+  for index in 0..cells.length {
+    invariant padded.length == index;
+
+    padded = padded
+      ++ [text.pad_start(of: cells[index], width: width, fill: " ")];
+  }
+  padded
+}
+
+example align_right_pads_to_the_widest for align_right {
+  align_right(cells: ["1.00", "12.50", "-3.00"]) == [" 1.00", "12.50", "-3.00"]
+}
+
+// Aligned columns have one common width, equal to the widest cell.
+pub fn aligned_cells_share_a_width(cells: List<String>) -> Bool {
+  let width = widest(cells: cells);
+  list.all(
+    items: align_right(cells: cells),
+    test: fn(cell: String) -> Bool {
+      cell.length == width
+    },
+  )
+    and list.all(
+      items: align_left(cells: cells),
+      test: fn(cell: String) -> Bool {
+        cell.length == width
+      },
+    )
+}
+
+example aligned_cells_share_a_width_cases for aligned_cells_share_a_width {
+  aligned_cells_share_a_width(cells: ["a", "abc"])
+    and aligned_cells_share_a_width(cells: [])
+}
+
+property columns_have_one_width for aligned_cells_share_a_width(
+  cells: List<String>,
+) {
+  aligned_cells_share_a_width(cells: cells)
+}
+
+// The width of the widest cell; 0 for no cells.
+pub fn widest(cells: List<String>) -> Int {
+  ensures result >= 0;
+
+  var longest: Int = 0;
+  for cell in cells {
+    invariant longest >= 0;
+
+    longest = int.max(first: longest, second: cell.length);
+  }
+  longest
+}
+
+example widest_cases for widest {
+  widest(cells: ["a", "abc", "ab"]) == 3 and widest(cells: []) == 0
+}

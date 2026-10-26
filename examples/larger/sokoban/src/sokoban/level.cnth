@@ -1,0 +1,344 @@
+// Turning level text into a validated Level.
+// A level is a list of text rows: `#` wall, space floor, `.` goal, `$` box, `*` box on a
+// goal, `@` player, `+` player on a goal. Parsing returns a Result, so a bad level is
+// reported as a value with the place of the problem and never as a defect.
+module sokoban.level;
+
+import sokoban.board;
+import sokoban.point;
+import std.int;
+import std.list;
+import std.option;
+import std.text;
+
+// What one source character says about a cell: the ground, and whether a box or the
+// player stands on it.
+record Cell {
+  tile: board.Tile,
+  has_box: Bool,
+  has_player: Bool,
+}
+
+// A puzzle at its starting position. The invariant is the rule "as many boxes as goals":
+// `Level(...)` cannot be built from lists that disagree, and the checker proves the rule
+// at the one place where a Level is made (`build`). It is written with `.length` and `==`
+// only, the simple shape the checker can use directly; a call to a user function in a
+// `where` clause would stay unproved.
+pub record Level {
+  grid: board.Board,
+  player: point.Point,
+  boxes: List<point.Point>,
+  goals: List<point.Point>,
+} where boxes.length == goals.length;
+
+// Everything that can be wrong with a level text. Each case carries the facts a
+// message needs; `describe` turns them into words.
+pub variant LevelError {
+  Empty,
+  UnknownCharacter(character: String, row: Int, col: Int),
+  NoPlayer,
+  TooManyPlayers(count: Int),
+  BoxGoalMismatch(boxes: Int, goals: Int),
+}
+
+// What scanning one row finds. `tiles` always has exactly the padded width.
+record RowScan {
+  tiles: List<board.Tile>,
+  boxes: List<point.Point>,
+  players: List<point.Point>,
+}
+
+// Makes the Level once the box count is known to match the goal count. The `if` and the
+// construction are in one function, so the checker sees that the test `boxes.length ==
+// goals` is exactly the record invariant of Level.
+fn build(
+  grid: board.Board,
+  player: point.Point,
+  boxes: List<point.Point>,
+) -> Result<Level, LevelError> {
+  let goals = board.goal_points(grid: grid);
+  if boxes.length == goals.length {
+    Ok(value: Level(grid: grid, player: player, boxes: boxes, goals: goals))
+  } else {
+    Err(
+      error: LevelError.BoxGoalMismatch(
+        boxes: boxes.length,
+        goals: goals.length,
+      ),
+    )
+  }
+}
+
+example build_checks_the_counts for build {
+  match parse(rows: ["#@$.#"]) {
+    Ok(value: parsed) => build(
+      grid: parsed.grid,
+      player: parsed.player,
+      boxes: [],
+    )
+      == Err(error: LevelError.BoxGoalMismatch(boxes: 0, goals: 1))
+      and build(grid: parsed.grid, player: parsed.player, boxes: parsed.boxes)
+        == Ok(value: parsed),
+    Err(error: _) => false,
+  }
+}
+
+// The meaning of one source character, or None for a character that is not part of
+// the level format.
+fn classify(character: String) -> Option<Cell> {
+  match character {
+    "#" => Some(
+      value: Cell(tile: board.Tile.Wall, has_box: false, has_player: false),
+    ),
+    " " => Some(
+      value: Cell(tile: board.Tile.Floor, has_box: false, has_player: false),
+    ),
+    "." => Some(
+      value: Cell(tile: board.Tile.Goal, has_box: false, has_player: false),
+    ),
+    "$" => Some(
+      value: Cell(tile: board.Tile.Floor, has_box: true, has_player: false),
+    ),
+    "*" => Some(
+      value: Cell(tile: board.Tile.Goal, has_box: true, has_player: false),
+    ),
+    "@" => Some(
+      value: Cell(tile: board.Tile.Floor, has_box: false, has_player: true),
+    ),
+    "+" => Some(
+      value: Cell(tile: board.Tile.Goal, has_box: false, has_player: true),
+    ),
+    _ => None,
+  }
+}
+
+example classify_reads_every_symbol for classify {
+  classify(character: "#")
+    == Some(
+      value: Cell(tile: board.Tile.Wall, has_box: false, has_player: false),
+    )
+    and classify(character: "*")
+      == Some(
+        value: Cell(tile: board.Tile.Goal, has_box: true, has_player: false),
+      )
+    and classify(character: "+")
+      == Some(
+        value: Cell(tile: board.Tile.Goal, has_box: false, has_player: true),
+      )
+    and classify(character: "x") == None
+    and classify(character: "") == None
+}
+
+// A one-line explanation of a level error. Positions are shown counted from 1, the way
+// a person counts rows and columns.
+pub fn describe(error: LevelError) -> String {
+  match error {
+    LevelError.Empty => "the level has no cells",
+    LevelError.UnknownCharacter(
+      character: character,
+      row: row,
+      col: col,
+    ) => "unknown character '"
+      ++ character
+      ++ "' at row "
+      ++ int.to_text(value: row + 1)
+      ++ ", column "
+      ++ int.to_text(value: col + 1),
+    LevelError.NoPlayer => "the level has no player (@ or +)",
+    LevelError.TooManyPlayers(count: count) => "the level has "
+      ++ int.to_text(value: count)
+      ++ " players, expected 1",
+    LevelError.BoxGoalMismatch(boxes: boxes, goals: goals) => "the level has "
+      ++ int.to_text(value: boxes)
+      ++ " boxes but "
+      ++ int.to_text(value: goals)
+      ++ " goals",
+  }
+}
+
+example describe_names_the_problem for describe {
+  describe(error: LevelError.Empty) == "the level has no cells"
+    and describe(
+      error: LevelError.UnknownCharacter(character: "x", row: 0, col: 2),
+    )
+      == "unknown character 'x' at row 1, column 3"
+    and describe(error: LevelError.TooManyPlayers(count: 2))
+      == "the level has 2 players, expected 1"
+    and describe(error: LevelError.BoxGoalMismatch(boxes: 3, goals: 2))
+      == "the level has 3 boxes but 2 goals"
+}
+
+// Reads and checks a whole level. The checks run from the cheapest to the most specific,
+// and the first failure wins. The Board and the Level are built last, after the facts
+// their invariants need (`width >= 1`, one box per goal) have been tested, so the
+// checker can prove each construction is valid.
+pub fn parse(rows: List<String>) -> Result<Level, LevelError> {
+  let width = widest(rows: rows);
+  if rows.length == 0 or width == 0 {
+    return Err(error: LevelError.Empty);
+  }
+  var tile_rows: List<List<board.Tile>> = [];
+  var boxes: List<point.Point> = [];
+  var players: List<point.Point> = [];
+  for index in 0..rows.length {
+    invariant tile_rows.length == index;
+
+    let scan = scan_row(line: rows[index], row: index, width: width)?;
+    tile_rows = tile_rows ++ [scan.tiles];
+    boxes = boxes ++ scan.boxes;
+    players = players ++ scan.players;
+  }
+  if players.length == 0 {
+    return Err(error: LevelError.NoPlayer);
+  }
+  if players.length > 1 {
+    return Err(error: LevelError.TooManyPlayers(count: players.length));
+  }
+  build(
+    grid: board.Board(width: width, rows: tile_rows),
+    player: players[0],
+    boxes: boxes,
+  )
+}
+
+example parse_accepts_a_box_and_player_on_goals for parse {
+  match parse(rows: ["#+$*#"]) {
+    Ok(value: parsed) => parsed.player == point.Point(row: 0, col: 1)
+      and parsed.boxes
+        == [point.Point(row: 0, col: 2), point.Point(row: 0, col: 3)]
+      and parsed.goals.length == 2,
+    Err(error: _) => false,
+  }
+}
+
+example parse_builds_a_level for parse {
+  match parse(rows: tiny_rows()) {
+    Ok(value: parsed) => parsed.player == point.Point(row: 1, col: 1)
+      and parsed.boxes == [point.Point(row: 1, col: 2)]
+      and parsed.goals == [point.Point(row: 1, col: 3)]
+      and parsed.grid.width == 5
+      and list.all(
+        items: parsed.grid.rows,
+        test: fn(line: List<board.Tile>) -> Bool {
+          line.length == 5
+        },
+      ),
+    Err(error: _) => false,
+  }
+}
+
+example parse_reports_each_kind_of_error for parse {
+  parse(rows: []) == Err(error: LevelError.Empty)
+    and parse(rows: ["", ""]) == Err(error: LevelError.Empty)
+    and parse(rows: ["#@x"])
+      == Err(error: LevelError.UnknownCharacter(character: "x", row: 0, col: 2))
+    and parse(rows: ["#$.#"]) == Err(error: LevelError.NoPlayer)
+    and parse(rows: ["#@@$.#"])
+      == Err(error: LevelError.TooManyPlayers(count: 2))
+    and parse(rows: ["#@$$.#"])
+      == Err(error: LevelError.BoxGoalMismatch(boxes: 2, goals: 1))
+}
+
+// Reads one row, padding it on the right with floor so that a row whose trailing spaces
+// were trimmed in the source still has `width` cells. The caller promises that no row is
+// wider than `width`, and the result promises the padded width back.
+fn scan_row(line: String, row: Int, width: Int) -> Result<RowScan, LevelError> {
+  requires line.length <= width;
+  ensures match result {
+    Ok(value: scan) => scan.tiles.length == width,
+    Err(error: _) => true,
+  };
+
+  let characters = text.chars(
+    of: text.pad_end(of: line, width: width, fill: " "),
+  );
+  var tiles: List<board.Tile> = [];
+  var boxes: List<point.Point> = [];
+  var players: List<point.Point> = [];
+  for col in 0..characters.length {
+    invariant tiles.length == col;
+
+    let cell = option.ok_or(
+      option: classify(character: characters[col]),
+      error: LevelError.UnknownCharacter(
+        character: characters[col],
+        row: row,
+        col: col,
+      ),
+    )?;
+    tiles = tiles ++ [cell.tile];
+    if cell.has_box {
+      boxes = boxes ++ [point.Point(row: row, col: col)];
+    }
+    if cell.has_player {
+      players = players ++ [point.Point(row: row, col: col)];
+    }
+  }
+  Ok(value: RowScan(tiles: tiles, boxes: boxes, players: players))
+}
+
+example scan_row_pads_and_reports for scan_row {
+  scan_row(line: "#$", row: 4, width: 4)
+    == Ok(
+      value: RowScan(
+        tiles: [
+          board.Tile.Wall,
+          board.Tile.Floor,
+          board.Tile.Floor,
+          board.Tile.Floor,
+        ],
+        boxes: [point.Point(row: 4, col: 1)],
+        players: [],
+      ),
+    )
+    and scan_row(line: "+", row: 0, width: 1)
+      == Ok(
+        value: RowScan(
+          tiles: [board.Tile.Goal],
+          boxes: [],
+          players: [point.Point(row: 0, col: 0)],
+        ),
+      )
+    and scan_row(line: "#?", row: 2, width: 2)
+      == Err(error: LevelError.UnknownCharacter(character: "?", row: 2, col: 1))
+}
+
+// A level that parses: a 5 by 3 room whose middle row is trimmed short in the source.
+fn tiny_rows() -> List<String> {
+  ["#####", "#@$.", "#####"]
+}
+
+// The length of the longest row. The postcondition says it really is an upper bound for
+// every row, which is exactly what `scan_row` needs from its caller.
+fn widest(rows: List<String>) -> Int {
+  ensures forall index in 0..rows.length: rows[index].length <= result;
+  ensures result == 0
+    or (exists index in 0..rows.length: rows[index].length == result);
+
+  var longest: Int = 0;
+  for index in 0..rows.length {
+    invariant longest >= 0;
+    invariant forall earlier in 0..index: rows[earlier].length <= longest;
+    invariant longest == 0
+      or (exists earlier in 0..index: rows[earlier].length == longest);
+
+    if rows[index].length > longest {
+      longest = rows[index].length;
+    }
+  }
+  longest
+}
+
+example widest_finds_the_longest_row for widest {
+  widest(rows: ["#", "#####", "##"]) == 5 and widest(rows: []) == 0
+}
+
+property widest_bounds_every_row for widest(rows: List<String>) {
+  let longest = widest(rows: rows);
+  list.all(
+    items: rows,
+    test: fn(row_text: String) -> Bool {
+      row_text.length <= longest
+    },
+  )
+}

@@ -1,0 +1,2 @@
+name = "expense_report"
+entry = "expense_report.main"

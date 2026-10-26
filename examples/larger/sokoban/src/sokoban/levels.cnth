@@ -1,0 +1,169 @@
+// The built-in levels, as data, with a known solution for each.
+// A level is its text rows (in the format `sokoban.level` reads; trailing spaces are
+// left out, the parser pads them) and a string of moves that solves it. The examples
+// below play every solution through the real game rules, so a typo in a level or in a
+// solution is caught when the examples run, not when someone plays it.
+module sokoban.levels;
+
+import sokoban.game;
+import sokoban.level;
+import sokoban.session;
+import std.list;
+
+// One built-in level: a title, the rows of the puzzle and a solution in move letters.
+pub record Entry {
+  title: String,
+  rows: List<String>,
+  solution: String,
+}
+
+// How many levels there are.
+pub fn count() -> Int {
+  ensures result >= 4;
+
+  entries().length
+}
+
+example count_matches_the_list for count {
+  count() == 5
+}
+
+// The levels in order of difficulty. Their numbers are positions in this list, from 1.
+// The stored solutions are shortest possible in moves (found by an exhaustive search):
+// 5, 17, 18, 24 and 41 moves.
+pub fn entries() -> List<Entry> {
+  ensures result.length >= 4;
+
+  [
+    Entry(
+      title: "Warm-up",
+      rows: ["######", "#. . #", "# $$ #", "#  @ #", "######"],
+      solution: "uldlu",
+    ),
+    Entry(
+      title: "Four crates",
+      rows: [
+        " ######",
+        "##    ##",
+        "#  $.  #",
+        "# $.$. #",
+        "#  .$@ #",
+        "##    ##",
+        " ######",
+      ],
+      solution: "lluruulldrlldrldr",
+    ),
+    Entry(
+      title: "Side pockets",
+      rows: [
+        " ######",
+        " #    #",
+        " # $. #",
+        "## #$ #",
+        "#  .  #",
+        "# @  ##",
+        "#  ###",
+        "####",
+      ],
+      solution: "uuuurrddrdluuulldr",
+    ),
+    Entry(
+      title: "Three in the middle",
+      rows: [
+        "  #####",
+        "###   #",
+        "#  $  #",
+        "# #.# ##",
+        "#  $ $ #",
+        "## .@.  #",
+        " #  #####",
+        " ####",
+      ],
+      solution: "lulluurrdduuurrddduululd",
+    ),
+    Entry(
+      title: "The long way round",
+      rows: [
+        "  ####",
+        "###  ####",
+        "#     $ #",
+        "# #  #$ #",
+        "# . .#@ #",
+        "#########",
+      ],
+      solution: "ruullluldrrrrddlurulllddllluurrdrdluuurdd",
+    ),
+  ]
+}
+
+example there_are_five_levels for entries {
+  entries().length == 5
+}
+
+// The level with a number counted from 1, or None for a number with no level.
+pub fn entry(number: Int) -> Option<Entry> {
+  let all = entries();
+  if number < 1 or number > all.length {
+    None
+  } else {
+    Some(value: all[number - 1])
+  }
+}
+
+example entry_finds_levels_by_number for entry {
+  match entry(number: 2) {
+    Some(value: found) => found.title == "Four crates",
+    None => false,
+  }
+}
+
+example entry_refuses_numbers_out_of_range for entry {
+  entry(number: 0) == None
+    and entry(number: -3) == None
+    and entry(number: count() + 1) == None
+}
+
+property entry_exists_exactly_for_valid_numbers for entry(number: Int) {
+  (entry(number: number) != None) == (number >= 1 and number <= count())
+}
+
+// Plays the stored solution of a level through the real game rules. True only when the
+// level parses, the solution solves it, no letter was skipped or ignored, and every
+// letter was a real move (so the solution has no wasted steps either).
+pub fn solves(number: Int) -> Bool {
+  match entry(number: number) {
+    None => false,
+    Some(value: found) => match level.parse(rows: found.rows) {
+      Err(error: _) => false,
+      Ok(value: puzzle) => {
+        let report = session.apply_line(
+          game: game.new_game(puzzle: puzzle),
+          line: found.solution,
+        );
+        game.is_solved(game: report.game)
+          and report.notes == []
+          and report.game.state.moves == found.solution.length
+      },
+    },
+  }
+}
+
+example a_number_without_a_level_is_not_solved for solves {
+  not solves(number: 0) and not solves(number: 6)
+}
+
+example every_solution_solves_its_level for solves {
+  list.all(
+    items: list.range(from: 1, to: count() + 1),
+    test: fn(number: Int) -> Bool {
+      solves(number: number)
+    },
+  )
+}
+
+example the_first_level_is_short for solves {
+  match entry(number: 1) {
+    Some(value: found) => found.solution.length < 15,
+    None => false,
+  }
+}

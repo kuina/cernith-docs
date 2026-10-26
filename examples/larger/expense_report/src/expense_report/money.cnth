@@ -1,0 +1,271 @@
+// Money as whole cents: parsing "12.50" without Float64, formatting, and a few operations.
+//
+// `Cents` is a `pub distinct` type, so it is abstract outside this module: other modules
+// cannot write `money.Cents(value: ...)` or read `.value` (E0215). They build money with
+// `parse` or `from_int` and combine it with the functions below, which keeps every
+// amount in the program an exact count of cents.
+module expense_report.money;
+
+import std.int;
+import std.list;
+import std.text;
+
+pub type Cents = distinct Int;
+
+pub fn add(first: Cents, second: Cents) -> Cents {
+  ensures result.value == first.value + second.value;
+
+  Cents(value: first.value + second.value)
+}
+
+example add_sums_cents for add {
+  add(first: from_int(value: 150), second: from_int(value: -50))
+    == from_int(value: 100)
+}
+
+// Adding an amount and then taking it away again leaves the first amount.
+pub fn add_then_subtract(first: Int, second: Int) -> Cents {
+  difference(
+    first: add(first: from_int(value: first), second: from_int(value: second)),
+    second: from_int(value: second),
+  )
+}
+
+example add_then_subtract_cases for add_then_subtract {
+  add_then_subtract(first: 7, second: 5) == from_int(value: 7)
+}
+
+property subtract_undoes_add for add_then_subtract(first: Int, second: Int) {
+  add_then_subtract(first: first, second: second) == from_int(value: first)
+}
+
+// A digit is a one-character string between "0" and "9". Strings are compared by code
+// point, so `>=` and `<=` on one-character strings work like a range test.
+fn all_digits(source: String) -> Bool {
+  source.length > 0
+    and list.all(
+      items: text.chars(of: source),
+      test: fn(piece: String) -> Bool {
+        piece >= "0" and piece <= "9"
+      },
+    )
+}
+
+example all_digits_cases for all_digits {
+  all_digits(source: "0042")
+    and not all_digits(source: "")
+    and not all_digits(source: "4x")
+    and not all_digits(source: "-4")
+}
+
+pub fn difference(first: Cents, second: Cents) -> Cents {
+  ensures result.value == first.value - second.value;
+
+  Cents(value: first.value - second.value)
+}
+
+example difference_subtracts for difference {
+  difference(first: from_int(value: 100), second: from_int(value: 130))
+    == from_int(value: -30)
+}
+
+// 1234 becomes "12.34" and -5 becomes "-0.05". `int.div_floor` and `int.rem_floor`
+// name the rounding rule; both operands are non-negative here, so any rule agrees.
+pub fn format(amount: Cents) -> String {
+  let cents = amount.value;
+  let size = int.abs(value: cents);
+  let whole = int.div_floor(dividend: size, divisor: 100);
+  let part = int.rem_floor(dividend: size, divisor: 100);
+  let sign = if cents < 0 {
+    "-"
+  } else {
+    ""
+  };
+  sign
+    ++ int.to_text(value: whole)
+    ++ "."
+    ++ text.pad_start(of: int.to_text(value: part), width: 2, fill: "0")
+}
+
+example format_cases for format {
+  format(amount: from_int(value: 1234)) == "12.34"
+    and format(amount: from_int(value: 5)) == "0.05"
+    and format(amount: from_int(value: 0)) == "0.00"
+    and format(amount: from_int(value: -5)) == "-0.05"
+    and format(amount: from_int(value: -250000)) == "-2500.00"
+}
+
+pub fn from_int(value: Int) -> Cents {
+  ensures result.value == value;
+
+  Cents(value: value)
+}
+
+example from_int_keeps_the_count for from_int {
+  to_int(amount: from_int(value: 7)) == 7
+}
+
+pub fn greater(first: Cents, second: Cents) -> Bool {
+  first.value > second.value
+}
+
+example greater_compares_cents for greater {
+  greater(first: from_int(value: 2), second: from_int(value: 1))
+    and not greater(first: from_int(value: 1), second: from_int(value: 1))
+}
+
+// Digits with an optional ".dd" tail, as a count of cents. Nothing else is accepted: no
+// sign, no spaces, no "12.", no ".5", no "12.5" (exactly two decimals or none).
+fn magnitude(source: String) -> Option<Int> {
+  match text.split_once(of: source, separator: ".") {
+    None => if all_digits(source: source) {
+      match int.parse(text: source) {
+        Some(value: whole) => Some(value: whole * 100),
+        None => None,
+      }
+    } else {
+      None
+    },
+    Some(value: pair) => if all_digits(source: pair.before)
+      and pair.after.length == 2
+      and all_digits(source: pair.after) {
+      match int.parse(text: pair.before) {
+        Some(value: whole) => match int.parse(text: pair.after) {
+          Some(value: part) => Some(value: whole * 100 + part),
+          None => None,
+        },
+        None => None,
+      }
+    } else {
+      None
+    },
+  }
+}
+
+example magnitude_cases for magnitude {
+  magnitude(source: "12") == Some(value: 1200)
+    and magnitude(source: "12.05") == Some(value: 1205)
+    and magnitude(source: "12.5") == None
+    and magnitude(source: "12.") == None
+    and magnitude(source: ".50") == None
+    and magnitude(source: "1.2.3") == None
+}
+
+pub fn negate(amount: Cents) -> Cents {
+  ensures result.value == 0 - amount.value;
+
+  Cents(value: 0 - amount.value)
+}
+
+example negate_flips_the_sign for negate {
+  negate(amount: from_int(value: 5)) == from_int(value: -5)
+    and negate(amount: from_int(value: 0)) == from_int(value: 0)
+}
+
+// "12.50", "7" and "-3.20" are money; "12.5x", "1,5" and "" are not. A leading "-"
+// marks a refund. The result is `None`, not a defect: bad text is expected input.
+pub fn parse(source: String) -> Option<Cents> {
+  // The length test tells the verifier that `slice` below starts inside the text.
+  if source.length > 0 and text.starts_with(of: source, prefix: "-") {
+    let rest = text.slice(of: source, from: 1, to: source.length);
+    match magnitude(source: rest) {
+      Some(value: size) => Some(value: Cents(value: 0 - size)),
+      None => None,
+    }
+  } else {
+    match magnitude(source: source) {
+      Some(value: size) => Some(value: Cents(value: size)),
+      None => None,
+    }
+  }
+}
+
+example parse_cases for parse {
+  parse(source: "12.50") == Some(value: from_int(value: 1250))
+    and parse(source: "7") == Some(value: from_int(value: 700))
+    and parse(source: "-3.20") == Some(value: from_int(value: -320))
+    and parse(source: "0.05") == Some(value: from_int(value: 5))
+    and parse(source: "12.5x") == None
+    and parse(source: "") == None
+    and parse(source: "-") == None
+    and parse(source: "1,5") == None
+    and parse(source: "+4") == None
+}
+
+// The share of `part` in `whole`, rounded to the nearest whole percent (halves go up).
+// Int has no `/`, so the rounding rule is named: `int.div_floor` of
+// (200 * part + whole) by (2 * whole). A whole that is not positive has no shares, so
+// the answer is 0 rather than a division by zero.
+pub fn percent_of(part: Cents, whole: Cents) -> Int {
+  if whole.value > 0 {
+    int.div_floor(
+      dividend: 200 * part.value + whole.value,
+      divisor: 2 * whole.value,
+    )
+  } else {
+    0
+  }
+}
+
+example percent_of_cases for percent_of {
+  percent_of(part: from_int(value: 1), whole: from_int(value: 3)) == 33
+    and percent_of(part: from_int(value: 2), whole: from_int(value: 3)) == 67
+    and percent_of(part: from_int(value: 1), whole: from_int(value: 8)) == 13
+    and percent_of(part: from_int(value: 5), whole: from_int(value: 5)) == 100
+    and percent_of(part: from_int(value: -1), whole: from_int(value: 4)) == -25
+    and percent_of(part: from_int(value: 1), whole: from_int(value: 0)) == 0
+}
+
+// The whole is always 100 percent of itself.
+pub fn percent_whole(cents: Int) -> Int {
+  requires cents > 0;
+
+  percent_of(part: from_int(value: cents), whole: from_int(value: cents))
+}
+
+example percent_whole_is_100 for percent_whole {
+  percent_whole(cents: 3) == 100
+}
+
+property whole_is_100_percent for percent_whole(cents: Int) {
+  requires cents > 0;
+
+  percent_whole(cents: cents) == 100
+}
+
+// Formatting and then parsing gives the same number of cents back, for every Int.
+pub fn round_trip(cents: Int) -> Option<Cents> {
+  parse(source: format(amount: from_int(value: cents)))
+}
+
+example round_trip_cases for round_trip {
+  round_trip(cents: 1250) == Some(value: from_int(value: 1250))
+    and round_trip(cents: -5) == Some(value: from_int(value: -5))
+}
+
+property format_then_parse_is_the_identity for round_trip(cents: Int) {
+  round_trip(cents: cents) == Some(value: from_int(value: cents))
+}
+
+// A loop keeps the running total as a plain Int and wraps it once at the end.
+pub fn sum(items: List<Cents>) -> Cents {
+  var total: Int = 0;
+  for item in items {
+    total = total + item.value;
+  }
+  Cents(value: total)
+}
+
+example sum_cases for sum {
+  sum(items: [from_int(value: 150), from_int(value: -50)])
+    == from_int(value: 100)
+    and sum(items: []) == from_int(value: 0)
+}
+
+pub fn to_int(amount: Cents) -> Int {
+  amount.value
+}
+
+example to_int_reads_the_cents for to_int {
+  to_int(amount: from_int(value: -1250)) == -1250
+}

@@ -1,0 +1,144 @@
+// Sokoban positions and directions.
+// A Point is a (row, col) pair counted from the top left corner; rows grow downward,
+// so "up" lowers the row. Everything here is pure arithmetic on small values.
+module sokoban.point;
+
+import std.int;
+
+// The four moves a player can make. A variant, so every `match` on it must name all four.
+pub variant Direction {
+  Up,
+  Down,
+  Left,
+  Right,
+}
+
+// A cell position. Plain Ints: positions outside the board are legal values (the board
+// treats them as walls), which keeps the arithmetic here free of conditions.
+pub record Point {
+  row: Int,
+  col: Int,
+}
+
+// Every direction once, in the order of the letters u, d, l, r.
+pub fn all_directions() -> List<Direction> {
+  ensures result.length == 4;
+
+  [Direction.Up, Direction.Down, Direction.Left, Direction.Right]
+}
+
+example all_directions_lists_four for all_directions {
+  all_directions().length == 4
+}
+
+// Manhattan distance: the number of single steps between two cells.
+pub fn distance(first: Point, second: Point) -> Int {
+  ensures result >= 0;
+
+  int.abs(value: first.row - second.row)
+    + int.abs(value: first.col - second.col)
+}
+
+example distance_counts_steps for distance {
+  distance(first: Point(row: 1, col: 1), second: Point(row: 1, col: 1)) == 0
+    and distance(first: Point(row: 1, col: 1), second: Point(row: 3, col: 0))
+      == 3
+}
+
+property distance_is_symmetric for distance(first: Point, second: Point) {
+  distance(first: first, second: second)
+    == distance(first: second, second: first)
+}
+
+// The direction a letter stands for, or None for any other text. Unknown input is an
+// ordinary value, not a defect, so the caller decides what to do with it.
+pub fn from_letter(text: String) -> Option<Direction> {
+  match text {
+    "u" => Some(value: Direction.Up),
+    "d" => Some(value: Direction.Down),
+    "l" => Some(value: Direction.Left),
+    "r" => Some(value: Direction.Right),
+    _ => None,
+  }
+}
+
+example from_letter_reads_the_four_letters for from_letter {
+  from_letter(text: "u") == Some(value: Direction.Up)
+    and from_letter(text: "r") == Some(value: Direction.Right)
+    and from_letter(text: "z") == None
+    and from_letter(text: "") == None
+    and from_letter(text: "uu") == None
+}
+
+// The move letter of a direction: u, d, l or r.
+pub fn letter(direction: Direction) -> String {
+  ensures result.length == 1;
+
+  match direction {
+    Direction.Up => "u",
+    Direction.Down => "d",
+    Direction.Left => "l",
+    Direction.Right => "r",
+  }
+}
+
+example letter_names_each_direction for letter {
+  letter(direction: Direction.Up) == "u"
+    and letter(direction: Direction.Down) == "d"
+    and letter(direction: Direction.Left) == "l"
+    and letter(direction: Direction.Right) == "r"
+}
+
+property letters_round_trip for letter(direction: Direction) {
+  from_letter(text: letter(direction: direction)) == Some(value: direction)
+}
+
+// The direction that undoes a move.
+pub fn opposite(direction: Direction) -> Direction {
+  match direction {
+    Direction.Up => Direction.Down,
+    Direction.Down => Direction.Up,
+    Direction.Left => Direction.Right,
+    Direction.Right => Direction.Left,
+  }
+}
+
+example opposite_swaps_the_ends for opposite {
+  opposite(direction: Direction.Up) == Direction.Down
+    and opposite(direction: Direction.Left) == Direction.Right
+}
+
+property opposite_twice_is_identity for opposite(direction: Direction) {
+  opposite(direction: opposite(direction: direction)) == direction
+}
+
+// The neighbouring cell in a direction. The postcondition is the whole contract of a
+// single step: exactly one cell away, whatever the direction.
+pub fn shift(spot: Point, direction: Direction) -> Point {
+  ensures int.abs(value: result.row - spot.row)
+    + int.abs(value: result.col - spot.col)
+    == 1;
+
+  match direction {
+    Direction.Up => Point(row: spot.row - 1, col: spot.col),
+    Direction.Down => Point(row: spot.row + 1, col: spot.col),
+    Direction.Left => Point(row: spot.row, col: spot.col - 1),
+    Direction.Right => Point(row: spot.row, col: spot.col + 1),
+  }
+}
+
+example shift_moves_one_cell for shift {
+  shift(spot: Point(row: 2, col: 3), direction: Direction.Up)
+    == Point(row: 1, col: 3)
+    and shift(spot: Point(row: 2, col: 3), direction: Direction.Right)
+      == Point(row: 2, col: 4)
+}
+
+// Walking one step and then one step in the opposite direction ends where it began.
+property shift_then_back_returns for shift(spot: Point, direction: Direction) {
+  shift(
+    spot: shift(spot: spot, direction: direction),
+    direction: opposite(direction: direction),
+  )
+    == spot
+}

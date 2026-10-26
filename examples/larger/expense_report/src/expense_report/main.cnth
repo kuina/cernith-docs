@@ -1,0 +1,81 @@
+// Sample: A command-line expense report, written as a package of small modules
+// Shows: a pure core (csv, money, date, expense, options, aggregate, report, app) with one thin io shell, collecting every validation problem instead of stopping at the first, integer money without Float64, contracts, examples and properties in every module
+// Chapter: language/14-modules-and-packages.md
+// Run: cernith run examples/larger/expense_report --args --month 2026-10 --budget food=300.00 < examples/larger/expense_report/expenses.csv
+//
+// The only module with `uses io` is this one. It reads the input lines, hands them
+// and the arguments to `app.run`, prints what comes back and returns the exit status.
+module expense_report.main;
+
+import expense_report.app as app;
+import std.io;
+import std.test;
+
+// Arguments are the options (see options.cnth); the exit status is the one `app.run`
+// chose, or 1 when the standard input or output could not be used.
+pub fn main(args: List<String>) -> Int uses io {
+  match io.read_all_lines() {
+    Err(error: _) => 1,
+    Ok(value: lines) => {
+      let outcome = app.run(lines: lines, args: args);
+      match print_all(lines: outcome.lines) {
+        Ok(value: _) => outcome.status,
+        Err(error: _) => 1,
+      }
+    },
+  }
+}
+
+// `test.with_world` runs the effectful `main` against a simulated terminal: the world's
+// `input` is the standard input, and `output` collects what was printed.
+example main_prints_the_report_and_returns_the_status for main {
+  report_of(
+    input: ["date,category,description,amount", "2026-10-03,food,Tea,2"],
+  )
+    == test.Outcome(
+      value: 0,
+      output: [
+        "Expense report",
+        "1 expense in 1 category",
+        "",
+        "By category",
+        "  food  2.00  100%",
+        "",
+        "By month",
+        "  2026-10  2.00",
+        "",
+        "Largest expenses",
+        "  1. 2026-10-03  Tea  2.00",
+        "",
+        "Grand total: 2.00",
+      ],
+    )
+}
+
+example main_returns_2_for_an_unknown_option for main {
+  test.with_world(
+    world: test.World(input: [], now_ms: 0, seed: 0),
+    run: fn() -> Int uses io {
+      main(args: ["--nope"])
+    },
+  ).value
+    == 2
+}
+
+// Prints every line; the first output failure stops the loop and is returned.
+fn print_all(lines: List<String>) -> Result<Unit, io.IoError> uses io {
+  for line in lines {
+    io.write_line(text: line)?;
+  }
+  Ok(value: ())
+}
+
+// Runs `main` without arguments on the given input lines.
+fn report_of(input: List<String>) -> test.Outcome<Int> {
+  test.with_world(
+    world: test.World(input: input, now_ms: 0, seed: 0),
+    run: fn() -> Int uses io {
+      main(args: [])
+    },
+  )
+}

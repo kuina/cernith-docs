@@ -135,7 +135,7 @@ pub fn smaller(a: String, b: String) -> String {
 }
 ```
 
-> Note: There are syntax forms and types that the checker cannot use in proofs. They are function expressions (closures), recursive `spec fn`s, `Map`, and types that contain a list of themselves (for example, a `Node` that has a case `Branch(children: List<Node>)`). Obligations that involve these are neither proved nor refuted, and become runtime checks.
+> Note: There are syntax forms and types that the checker cannot use in proofs. They are function expressions (closures), recursive `spec fn`s, `Map`, and types that contain a list of themselves (for example, a `Node` that has a case `Branch(children: List<Node>)`). Obligations that involve these are neither proved nor refuted, and become runtime checks. A definition that contains them (or that calls a function whose contract uses them, such as `int.pow`) stays at the level `typed` and gets no diagnostic, so "no diagnostics" is not the same as "proved": look at `summary.levels` when you need to know what was proved.
 
 ## Assurance levels
 

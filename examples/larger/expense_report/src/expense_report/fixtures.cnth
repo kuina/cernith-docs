@@ -1,0 +1,52 @@
+// Test support: fake expenses and a few helpers shared by the examples and properties of
+// several modules. It holds no logic of the program itself.
+module expense_report.fixtures;
+
+import expense_report.date as date;
+import expense_report.expense as expense;
+import expense_report.money as money;
+import std.int;
+import std.list;
+
+// The `amounts` of a ranking, to state "never increasing" as a fact about Ints.
+pub fn amounts_of(records: List<expense.Expense>) -> List<Int> {
+  list.map(
+    items: records,
+    apply: fn(item: expense.Expense) -> Int {
+      money.to_int(amount: item.amount)
+    },
+  )
+}
+
+// Fake expenses for examples and properties: one per amount, in cents, cycling through
+// three categories and twelve months, so every test shares the same shapes.
+pub fn sample_records(amounts: List<Int>) -> List<expense.Expense> {
+  ensures result.length == amounts.length;
+
+  let categories = ["food", "travel", "office"];
+  var records: List<expense.Expense> = [];
+  for index in 0..amounts.length {
+    invariant records.length == index;
+
+    records = records
+      ++ [
+        expense.Expense(
+          date: date.Date(
+            year: 2026,
+            month: 1 + int.rem_euclid(dividend: index, divisor: 12),
+            day: 1,
+          ),
+          category: categories[int.rem_euclid(dividend: index, divisor: 3)],
+          description: "sample",
+          amount: money.from_int(value: amounts[index]),
+        ),
+      ];
+  }
+  records
+}
+
+example sample_records_cycle_categories for sample_records {
+  sample_records(amounts: [1, 2, 3, 4])[3].category == "food"
+    and sample_records(amounts: [1, 2, 3, 4])[1].category == "travel"
+    and sample_records(amounts: []) == []
+}

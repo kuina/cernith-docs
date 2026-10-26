@@ -1,0 +1,301 @@
+// The rules of Sokoban as pure functions.
+// A State is the part of the game that changes: where the player and the boxes are, and
+// how many moves and pushes were made. `step` takes a State and a direction and returns
+// the next State together with what happened. There is no hidden state anywhere, which is
+// what makes undo and the laws below so simple.
+module sokoban.moves;
+
+import sokoban.board;
+import sokoban.level;
+import sokoban.point;
+import sokoban.samples;
+import std.list;
+
+// What a step did. Blocked: nothing changed. Moved: the player walked. Pushed: the
+// player walked and shoved a box in front of them.
+pub variant Outcome {
+  Blocked,
+  Moved,
+  Pushed,
+}
+
+// The changing part of a puzzle. The invariant ties the counters together: a push is
+// also a move, so there can never be more pushes than moves.
+pub record State {
+  player: point.Point,
+  boxes: List<point.Point>,
+  moves: Int,
+  pushes: Int,
+} where moves >= 0 and pushes >= 0 and pushes <= moves;
+
+// The result of `step`: what happened and the state afterwards.
+pub record Step {
+  outcome: Outcome,
+  state: State,
+}
+
+// One step from the start of the corridor, where two boxes stand in a row in front of the
+// player.
+fn corridor_step(direction: point.Direction) -> Option<Step> {
+  match samples.corridor() {
+    Some(value: puzzle) => Some(
+      value: step(
+        grid: puzzle.grid,
+        state: initial(puzzle: puzzle),
+        direction: direction,
+      ),
+    ),
+    None => None,
+  }
+}
+
+// Two boxes in a row cannot be pushed together.
+example a_box_behind_a_box_blocks_the_push for corridor_step {
+  match corridor_step(direction: point.Direction.Right) {
+    Some(value: taken) => taken.outcome == Outcome.Blocked
+      and taken.state.pushes == 0,
+    None => false,
+  }
+}
+
+// A State at the start of a puzzle: nothing moved yet.
+pub fn initial(puzzle: level.Level) -> State {
+  ensures result.moves == 0 and result.pushes == 0;
+  ensures result.boxes == puzzle.boxes;
+
+  State(player: puzzle.player, boxes: puzzle.boxes, moves: 0, pushes: 0)
+}
+
+// True when every box stands on a goal. An empty list of boxes is solved too, which is
+// why `level.parse` can accept a level with no boxes and no goals.
+pub fn is_solved(grid: board.Board, state: State) -> Bool {
+  list.all(
+    items: state.boxes,
+    test: fn(crate: point.Point) -> Bool {
+      board.is_goal(grid: grid, spot: crate)
+    },
+  )
+}
+
+example an_empty_box_list_is_solved for is_solved {
+  match samples.room() {
+    Some(value: puzzle) => is_solved(
+      grid: puzzle.grid,
+      state: State(player: puzzle.player, boxes: [], moves: 0, pushes: 0),
+    ),
+    None => false,
+  }
+}
+
+example room_starts_unsolved for is_solved {
+  match samples.room() {
+    Some(value: puzzle) => not is_solved(
+      grid: puzzle.grid,
+      state: initial(puzzle: puzzle),
+    ),
+    None => false,
+  }
+}
+
+// The box list with the box at `from` moved to `to`; every other box stays where it is
+// and the order of the list is kept. The loop invariant says the same thing for the part
+// of the list built so far, and the checker carries it to the postcondition. (`list.map`
+// would be shorter, but it promises only the length, not what happens to each element.)
+pub fn move_box(
+  boxes: List<point.Point>,
+  from: point.Point,
+  to: point.Point,
+) -> List<point.Point> {
+  ensures result.length == boxes.length;
+  ensures forall index in 0..boxes.length: (
+    boxes[index] == from implies result[index] == to
+  )
+    and (boxes[index] != from implies result[index] == boxes[index]);
+
+  var moved: List<point.Point> = [];
+  for index in 0..boxes.length {
+    invariant moved.length == index;
+    invariant forall earlier in 0..index: (
+      boxes[earlier] == from implies moved[earlier] == to
+    )
+      and (boxes[earlier] != from implies moved[earlier] == boxes[earlier]);
+
+    if boxes[index] == from {
+      moved = moved ++ [to];
+    } else {
+      moved = moved ++ [boxes[index]];
+    }
+  }
+  moved
+}
+
+example move_box_replaces_one_box for move_box {
+  move_box(
+    boxes: [point.Point(row: 1, col: 1), point.Point(row: 2, col: 2)],
+    from: point.Point(row: 2, col: 2),
+    to: point.Point(row: 2, col: 3),
+  )
+    == [point.Point(row: 1, col: 1), point.Point(row: 2, col: 3)]
+}
+
+// One step in the room after a list of directions; None only if the room text broke.
+fn room_step(
+  path: List<point.Direction>,
+  direction: point.Direction,
+) -> Option<Step> {
+  match samples.room() {
+    Some(value: puzzle) => Some(
+      value: step(
+        grid: puzzle.grid,
+        state: walk(
+          grid: puzzle.grid,
+          state: initial(puzzle: puzzle),
+          path: path,
+        ),
+        direction: direction,
+      ),
+    ),
+    None => None,
+  }
+}
+
+// One step of the player. The cell in front is looked at first:
+//   a wall                         -> Blocked
+//   a box with a wall or a box behind it -> Blocked (a box cannot be pulled, or doubled)
+//   a box with free ground behind it     -> Pushed
+//   anything else                  -> Moved
+// The contract is the whole behaviour in terms of the counters: a blocked step returns
+// the very same state, a move adds one move, a push adds one move and one push, and in no
+// case does the number of boxes change.
+pub fn step(
+  grid: board.Board,
+  state: State,
+  direction: point.Direction,
+) -> Step {
+  ensures result.state.boxes.length == state.boxes.length;
+  ensures match result.outcome {
+    Outcome.Blocked => result.state == state,
+    Outcome.Moved => result.state.moves == state.moves + 1
+      and result.state.pushes == state.pushes
+      and result.state.boxes == state.boxes,
+    Outcome.Pushed => result.state.moves == state.moves + 1
+      and result.state.pushes == state.pushes + 1,
+  };
+
+  let target = point.shift(spot: state.player, direction: direction);
+  if board.is_wall(grid: grid, spot: target) {
+    Step(outcome: Outcome.Blocked, state: state)
+  } else if list.contains(items: state.boxes, item: target) {
+    let beyond = point.shift(spot: target, direction: direction);
+    if board.is_wall(grid: grid, spot: beyond)
+      or list.contains(items: state.boxes, item: beyond) {
+      Step(outcome: Outcome.Blocked, state: state)
+    } else {
+      Step(
+        outcome: Outcome.Pushed,
+        state: State(
+          player: target,
+          boxes: move_box(boxes: state.boxes, from: target, to: beyond),
+          moves: state.moves + 1,
+          pushes: state.pushes + 1,
+        ),
+      )
+    }
+  } else {
+    Step(
+      outcome: Outcome.Moved,
+      state: State(
+        player: target,
+        boxes: state.boxes,
+        moves: state.moves + 1,
+        pushes: state.pushes,
+      ),
+    )
+  }
+}
+
+// Pushing a box into a wall is refused: the first push takes the box at row 3 down to
+// the last free row, a second push would put it into the bottom wall.
+example a_box_cannot_enter_a_wall for step {
+  match room_step(
+    path: [point.Direction.Left, point.Direction.Down],
+    direction: point.Direction.Down,
+  ) {
+    Some(value: taken) => taken.outcome == Outcome.Blocked,
+    None => false,
+  }
+}
+
+example a_free_cell_is_a_plain_move for step {
+  room_step(path: [], direction: point.Direction.Up)
+    == Some(
+      value: Step(
+        outcome: Outcome.Moved,
+        state: State(
+          player: point.Point(row: 1, col: 4),
+          boxes: [point.Point(row: 2, col: 2), point.Point(row: 3, col: 3)],
+          moves: 1,
+          pushes: 0,
+        ),
+      ),
+    )
+}
+
+example a_wall_blocks_the_player for step {
+  match room_step(
+    path: [point.Direction.Right],
+    direction: point.Direction.Right,
+  ) {
+    Some(value: taken) => taken.outcome == Outcome.Blocked
+      and taken.state.moves == 1,
+    None => false,
+  }
+}
+
+example walking_into_a_box_pushes_it for step {
+  room_step(path: [point.Direction.Left], direction: point.Direction.Left)
+    == Some(
+      value: Step(
+        outcome: Outcome.Pushed,
+        state: State(
+          player: point.Point(row: 2, col: 2),
+          boxes: [point.Point(row: 2, col: 1), point.Point(row: 3, col: 3)],
+          moves: 2,
+          pushes: 1,
+        ),
+      ),
+    )
+}
+
+// Plays the directions one after another from `state`; blocked steps simply leave the
+// state as it is. The loop invariant repeats the facts the caller needs: the box count
+// and the move counter.
+pub fn walk(
+  grid: board.Board,
+  state: State,
+  path: List<point.Direction>,
+) -> State {
+  ensures result.boxes.length == state.boxes.length;
+  ensures result.moves >= state.moves;
+
+  var current: State = state;
+  for direction in path {
+    invariant current.boxes.length == state.boxes.length;
+    invariant current.moves >= state.moves;
+
+    current = step(grid: grid, state: current, direction: direction).state;
+  }
+  current
+}
+
+example walk_follows_the_path for walk {
+  match samples.room() {
+    Some(value: puzzle) => walk(
+      grid: puzzle.grid,
+      state: initial(puzzle: puzzle),
+      path: [point.Direction.Up, point.Direction.Left, point.Direction.Left],
+    ).player
+      == point.Point(row: 1, col: 2),
+    None => false,
+  }
+}

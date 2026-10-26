@@ -1,0 +1,89 @@
+// Unlimited undo as a stack of earlier values.
+// Because a game state is an immutable value, "undo" needs no inverse moves: remember the
+// state before each move and hand it back when asked. The history is generic, so this
+// module knows nothing about Sokoban.
+module sokoban.history;
+
+import std.list;
+
+// The remembered values, oldest first; the most recent one is the last element.
+pub record History<T> {
+  past: List<T>,
+}
+
+// What `undo` returns: the value to go back to and the history without it.
+pub record Restored<T> {
+  item: T,
+  rest: History<T>,
+}
+
+// How many steps can still be undone.
+pub fn depth<T>(history: History<T>) -> Int {
+  ensures result >= 0 and result == history.past.length;
+
+  history.past.length
+}
+
+example depth_counts_remembered_values for depth {
+  depth(history: History(past: [1, 2, 3])) == 3
+}
+
+// A history with nothing to undo.
+pub fn empty<T>() -> History<T> {
+  ensures result.past.length == 0;
+
+  History(past: [])
+}
+
+example a_new_history_is_empty for empty {
+  depth(history: empty::<Int>()) == 0
+}
+
+// Remembers a value; it becomes the next one `undo` returns.
+pub fn remember<T>(history: History<T>, item: T) -> History<T> {
+  ensures result.past.length == history.past.length + 1;
+
+  History(past: history.past ++ [item])
+}
+
+example remember_adds_to_the_end for remember {
+  remember(history: History(past: [1, 2]), item: 3) == History(past: [1, 2, 3])
+}
+
+// Takes the most recent value back out, or None when there is nothing to undo. The
+// Option is the whole story of "nothing to undo": no defect, no special value.
+pub fn undo<T>(history: History<T>) -> Option<Restored<T>> {
+  ensures match result {
+    None => history.past.length == 0,
+    Some(value: restored) => restored.rest.past.length + 1
+      == history.past.length,
+  };
+
+  if history.past.length == 0 {
+    None
+  } else {
+    let last = history.past.length - 1;
+    Some(
+      value: Restored(
+        item: history.past[last],
+        rest: History(past: list.take(items: history.past, count: last)),
+      ),
+    )
+  }
+}
+
+example undo_of_nothing_is_none for undo {
+  undo(history: empty::<Int>()) == None
+}
+
+example undo_returns_the_latest_value for undo {
+  undo(history: History(past: [1, 2, 3]))
+    == Some(value: Restored(item: 3, rest: History(past: [1, 2])))
+}
+
+// Law: undoing right after remembering gives back exactly what was remembered, and the
+// history as it was before.
+property undo_reverses_remember for undo(history: History<Int>, item: Int) {
+  undo(history: remember(history: history, item: item))
+    == Some(value: Restored(item: item, rest: history))
+}

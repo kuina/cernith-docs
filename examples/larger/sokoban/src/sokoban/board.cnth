@@ -1,0 +1,169 @@
+// The fixed part of a puzzle: walls, floor and goals.
+// Boxes and the player move, so they live in `sokoban.moves`; a Board never changes
+// during play. Anything outside the grid counts as a wall.
+module sokoban.board;
+
+import sokoban.point;
+
+// `width` is the number of columns; every row is expected to have that many tiles
+// (`sokoban.level` pads short rows). The invariant only promises a non-empty grid;
+// queries below still check each index, so a ragged Board could never cause a defect.
+pub record Board {
+  width: Int,
+  rows: List<List<Tile>>,
+} where width >= 1 and rows.length >= 1;
+
+// One cell of the grid. A box or the player standing on a goal still has the tile Goal:
+// the tile says what the ground is, not what stands on it.
+pub variant Tile {
+  Wall,
+  Floor,
+  Goal,
+}
+
+// How many goals the board has; a valid level has exactly as many boxes.
+pub fn goal_count(grid: Board) -> Int {
+  ensures result >= 0;
+
+  goal_points(grid: grid).length
+}
+
+example goal_count_counts_goals for goal_count {
+  goal_count(grid: sample()) == 1
+}
+
+// Every goal cell, scanning row by row. The loops are plain `for` loops over ranges
+// taken from the grid itself, so each index is known to be in range and the nested
+// reads need no extra argument.
+pub fn goal_points(grid: Board) -> List<point.Point> {
+  var found: List<point.Point> = [];
+  for row in 0..grid.rows.length {
+    let line = grid.rows[row];
+    for col in 0..line.length {
+      if line[col] == Tile.Goal {
+        found = found ++ [point.Point(row: row, col: col)];
+      }
+    }
+  }
+  found
+}
+
+example goal_points_finds_the_goal for goal_points {
+  goal_points(grid: sample()) == [point.Point(row: 1, col: 1)]
+}
+
+// The number of rows.
+pub fn height(grid: Board) -> Int {
+  ensures result >= 1 and result == grid.rows.length;
+
+  grid.rows.length
+}
+
+example height_counts_rows for height {
+  height(grid: sample()) == 3
+}
+
+// True when the position names a real cell. The row is tested before it is used to
+// index, and `or` stops at the first true operand, so no index is ever out of range.
+pub fn in_bounds(grid: Board, spot: point.Point) -> Bool {
+  if spot.row < 0 or spot.row >= grid.rows.length or spot.col < 0 {
+    false
+  } else {
+    spot.col < grid.rows[spot.row].length
+  }
+}
+
+example in_bounds_checks_both_axes for in_bounds {
+  in_bounds(grid: sample(), spot: point.Point(row: 1, col: 2))
+    and not in_bounds(grid: sample(), spot: point.Point(row: 3, col: 0))
+    and not in_bounds(grid: sample(), spot: point.Point(row: 0, col: 3))
+    and not in_bounds(grid: sample(), spot: point.Point(row: -1, col: 0))
+    and not in_bounds(grid: sample(), spot: point.Point(row: 0, col: -1))
+}
+
+pub fn is_goal(grid: Board, spot: point.Point) -> Bool {
+  tile_at(grid: grid, spot: spot) == Tile.Goal
+}
+
+example is_goal_matches_the_tile for is_goal {
+  is_goal(grid: sample(), spot: point.Point(row: 1, col: 1))
+    and not is_goal(grid: sample(), spot: point.Point(row: 1, col: 2))
+}
+
+pub fn is_wall(grid: Board, spot: point.Point) -> Bool {
+  tile_at(grid: grid, spot: spot) == Tile.Wall
+}
+
+example is_wall_matches_the_tile for is_wall {
+  is_wall(grid: sample(), spot: point.Point(row: 0, col: 1))
+    and not is_wall(grid: sample(), spot: point.Point(row: 1, col: 1))
+}
+
+// The tile of the sample board at any row and column. A property needs generated
+// inputs, and a Board with its invariant cannot be generated, so the law below is
+// stated over plain numbers and a fixed board.
+fn probe(row: Int, col: Int) -> Tile {
+  tile_at(grid: sample(), spot: point.Point(row: row, col: col))
+}
+
+property off_the_grid_is_a_wall for probe(row: Int, col: Int) {
+  requires row < 0 or row > 2 or col < 0 or col > 2;
+
+  probe(row: row, col: col) == Tile.Wall
+}
+
+// A tiny fixed board for the examples: the middle cell of the middle row is a goal.
+fn sample() -> Board {
+  Board(
+    width: 3,
+    rows: [
+      [Tile.Wall, Tile.Wall, Tile.Wall],
+      [Tile.Wall, Tile.Goal, Tile.Floor],
+      [Tile.Wall, Tile.Wall, Tile.Wall],
+    ],
+  )
+}
+
+// The tile at a position; positions outside the grid are walls, so a player or a box
+// can never leave the board.
+pub fn tile_at(grid: Board, spot: point.Point) -> Tile {
+  if spot.row < 0 or spot.row >= grid.rows.length or spot.col < 0 {
+    Tile.Wall
+  } else {
+    let line = grid.rows[spot.row];
+    if spot.col >= line.length {
+      Tile.Wall
+    } else {
+      line[spot.col]
+    }
+  }
+}
+
+example tile_at_outside_is_a_wall for tile_at {
+  tile_at(grid: sample(), spot: point.Point(row: 1, col: 3)) == Tile.Wall
+    and tile_at(grid: sample(), spot: point.Point(row: -1, col: 1)) == Tile.Wall
+    and tile_at(grid: sample(), spot: point.Point(row: 9, col: 9)) == Tile.Wall
+}
+
+example tile_at_reads_the_grid for tile_at {
+  tile_at(grid: sample(), spot: point.Point(row: 1, col: 1)) == Tile.Goal
+    and tile_at(grid: sample(), spot: point.Point(row: 1, col: 2)) == Tile.Floor
+    and tile_at(grid: sample(), spot: point.Point(row: 0, col: 0)) == Tile.Wall
+}
+
+// The text for one tile when nothing stands on it: `#`, space or `.`.
+pub fn tile_char(tile: Tile) -> String {
+  ensures result.length == 1;
+
+  match tile {
+    Tile.Wall => "#",
+    Tile.Floor => " ",
+    Tile.Goal => ".",
+  }
+}
+
+example tile_char_draws_tiles for tile_char {
+  tile_char(tile: Tile.Wall) == "#"
+    and tile_char(tile: Tile.Floor) == " "
+    and tile_char(tile: Tile.Goal) == "."
+}

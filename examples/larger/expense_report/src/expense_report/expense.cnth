@@ -1,0 +1,286 @@
+// The typed expense record and its validation. A bad line becomes a `Problem` that
+// carries the line number and a structured `Reason`; nothing here stops at the first
+// error, because the caller collects one `Problem` per bad line.
+module expense_report.expense;
+
+import expense_report.csv as csv;
+import expense_report.date as date;
+import expense_report.money as money;
+import std.int;
+import std.list;
+import std.result;
+import std.text;
+
+// A valid record: the date is a real day, the category is known, the description is
+// not empty, and the amount is exact cents (negative for a refund).
+pub record Expense {
+  date: date.Date,
+  category: String,
+  description: String,
+  amount: money.Cents,
+}
+
+// A problem always belongs to a real line of the input.
+pub record Problem {
+  line: Int,
+  reason: Reason,
+} where line >= 1;
+
+// What is wrong with a line. Each case keeps the offending text so the message can
+// quote it. `Csv` wraps the error of another module: Cernith converts errors only
+// where the code says so (see `parse_row`).
+pub variant Reason {
+  BadAmount(given: String),
+  BadDate(given: String, error: date.DateError),
+  BadHeader(given: String),
+  Csv(error: csv.CsvError),
+  EmptyCategory,
+  EmptyDescription,
+  MissingHeader,
+  UnknownCategory(name: String),
+}
+
+// A line written from any number of cents is read back with exactly that amount.
+pub fn amount_survives_parsing(cents: Int) -> Bool {
+  let row = csv.Line(
+    number: 2,
+    content: "2026-10-03,food,Lunch,"
+      ++ money.format(amount: money.from_int(value: cents)),
+  );
+  match parse_row(row: row) {
+    Ok(value: parsed) => parsed.amount == money.from_int(value: cents),
+    Err(error: _) => false,
+  }
+}
+
+example amount_survives_parsing_cases for amount_survives_parsing {
+  amount_survives_parsing(cents: 1250)
+    and amount_survives_parsing(cents: -1250)
+    and amount_survives_parsing(cents: 0)
+}
+
+property well_formed_lines_keep_their_amount for amount_survives_parsing(
+  cents: Int,
+) {
+  amount_survives_parsing(cents: cents)
+}
+
+// Checks line 1 of the input. `None` means the header is fine.
+pub fn check_header(lines: List<String>) -> Option<Problem> {
+  if lines.length == 0 {
+    return Some(value: Problem(line: 1, reason: Reason.MissingHeader));
+  }
+  if csv.split_fields(content: lines[0]) == header_fields() {
+    None
+  } else {
+    Some(value: Problem(line: 1, reason: Reason.BadHeader(given: lines[0])))
+  }
+}
+
+example check_header_cases for check_header {
+  check_header(lines: ["date,category,description,amount", "x"]) == None
+    and check_header(lines: [" date , category,description,amount"]) == None
+    and check_header(lines: ["date,amount"])
+      == Some(
+        value: Problem(line: 1, reason: Reason.BadHeader(given: "date,amount")),
+      )
+    and check_header(lines: [])
+      == Some(value: Problem(line: 1, reason: Reason.MissingHeader))
+}
+
+// The whole message of the error list, for example `line 7: category is empty`.
+pub fn describe(problem: Problem) -> String {
+  "line "
+    ++ int.to_text(value: problem.line)
+    ++ ": "
+    ++ describe_reason(reason: problem.reason)
+}
+
+example describe_includes_the_line_number for describe {
+  describe(problem: Problem(line: 7, reason: Reason.EmptyCategory))
+    == "line 7: category is empty"
+    and describe(
+      problem: Problem(line: 12, reason: Reason.BadAmount(given: "x")),
+    )
+      == "line 12: amount \"x\" is not a money amount (digits with two decimals or none)"
+}
+
+// The text after "line N: ", quoting the bad value where there is one.
+pub fn describe_reason(reason: Reason) -> String {
+  match reason {
+    Reason.BadAmount(given: given) => "amount \""
+      ++ given
+      ++ "\" is not a money amount (digits with two decimals or none)",
+    Reason.BadDate(given: given, error: error) => "date \""
+      ++ given
+      ++ "\" "
+      ++ date.describe(error: error),
+    Reason.BadHeader(given: given) => "header \""
+      ++ given
+      ++ "\" is not date,category,description,amount",
+    Reason.Csv(error: error) => "record " ++ csv.describe(error: error),
+    Reason.EmptyCategory => "category is empty",
+    Reason.EmptyDescription => "description is empty",
+    Reason.MissingHeader => "the input is empty, there is no header line",
+    Reason.UnknownCategory(name: name) => "unknown category \"" ++ name ++ "\"",
+  }
+}
+
+example describe_reason_cases for describe_reason {
+  describe_reason(reason: Reason.BadAmount(given: "12.5x"))
+    == "amount \"12.5x\" is not a money amount (digits with two decimals or none)"
+    and describe_reason(reason: Reason.UnknownCategory(name: "snacks"))
+      == "unknown category \"snacks\""
+    and describe_reason(reason: Reason.EmptyCategory) == "category is empty"
+}
+
+// The columns, in order. The header line of the input must be exactly these.
+pub fn header_fields() -> List<String> {
+  ["date", "category", "description", "amount"]
+}
+
+example header_fields_has_four_columns for header_fields {
+  header_fields().length == 4 and header_fields()[3] == "amount"
+}
+
+pub fn is_known(category: String) -> Bool {
+  list.contains(items: known_categories(), item: category)
+}
+
+example is_known_cases for is_known {
+  is_known(category: "food")
+    and not is_known(category: "snacks")
+    and not is_known(category: "")
+}
+
+// The categories the report knows. A budget for another category is refused too.
+pub fn known_categories() -> List<String> {
+  ["food", "lodging", "office", "other", "software", "travel"]
+}
+
+example known_categories_are_sorted for known_categories {
+  list.sort(items: known_categories()) == known_categories()
+}
+
+// Lower-case, trimmed, and checked against the known list.
+fn parse_category(given: String) -> Result<String, Reason> {
+  let name = text.to_lower(of: text.trim(of: given));
+  if text.is_empty(of: name) {
+    Err(error: Reason.EmptyCategory)
+  } else if is_known(category: name) {
+    Ok(value: name)
+  } else {
+    Err(error: Reason.UnknownCategory(name: name))
+  }
+}
+
+example parse_category_cases for parse_category {
+  parse_category(given: " Food ") == Ok(value: "food")
+    and parse_category(given: "") == Err(error: Reason.EmptyCategory)
+    and parse_category(given: "snacks")
+      == Err(error: Reason.UnknownCategory(name: "snacks"))
+}
+
+// Turns the four fields into an Expense, reporting the first field that is wrong.
+// Each step returns `Result<_, Reason>`, so `?` passes the reason on unchanged; the
+// steps whose own error type differs are converted with `result.map_error`.
+fn parse_fields(found: List<String>) -> Result<Expense, Reason> {
+  requires found.length == 4;
+
+  let day = result.map_error(
+    outcome: date.parse(source: found[0]),
+    apply: fn(error: date.DateError) -> Reason {
+      Reason.BadDate(given: found[0], error: error)
+    },
+  )?;
+  let category = parse_category(given: found[1])?;
+  if text.is_empty(of: found[2]) {
+    return Err(error: Reason.EmptyDescription);
+  }
+  match money.parse(source: found[3]) {
+    None => Err(error: Reason.BadAmount(given: found[3])),
+    Some(value: amount) => Ok(
+      value: Expense(
+        date: day,
+        category: category,
+        description: found[2],
+        amount: amount,
+      ),
+    ),
+  }
+}
+
+// Parses one numbered line. The error carries the line number.
+pub fn parse_row(row: csv.Line) -> Result<Expense, Problem> {
+  // A plain `match`, not `?` after `map_error`: the verifier keeps the postcondition of
+  // `csv.fields` (four fields on success) only through the match on its own result.
+  match csv.fields(content: row.content, expected: 4) {
+    Err(error: error) => Err(
+      error: Problem(line: row.number, reason: Reason.Csv(error: error)),
+    ),
+    Ok(value: found) => result.map_error(
+      outcome: parse_fields(found: found),
+      apply: fn(reason: Reason) -> Problem {
+        Problem(line: row.number, reason: reason)
+      },
+    ),
+  }
+}
+
+example parse_row_accepts_a_good_line for parse_row {
+  parse_row(
+    row: csv.Line(number: 2, content: "2026-10-03,Food,Lunch with team,12.50"),
+  )
+    == Ok(
+      value: Expense(
+        date: date.Date(year: 2026, month: 10, day: 3),
+        category: "food",
+        description: "Lunch with team",
+        amount: money.from_int(value: 1250),
+      ),
+    )
+}
+
+example parse_row_rejects_commas_and_quotes for parse_row {
+  parse_row(row: csv.Line(number: 3, content: "2026-10-03,food,Lunch, big,12"))
+    == Err(
+      error: Problem(
+        line: 3,
+        reason: Reason.Csv(
+          error: csv.CsvError.WrongFieldCount(found: 5, expected: 4),
+        ),
+      ),
+    )
+    and parse_row(
+      row: csv.Line(number: 4, content: "2026-10-03,food,\"Lunch\",12"),
+    )
+      == Err(
+        error: Problem(
+          line: 4,
+          reason: Reason.Csv(error: csv.CsvError.QuoteNotSupported),
+        ),
+      )
+}
+
+example parse_row_reports_each_kind_of_problem for parse_row {
+  parse_row(row: csv.Line(number: 7, content: "2026-10-03,food,Lunch,12.5x"))
+    == Err(error: Problem(line: 7, reason: Reason.BadAmount(given: "12.5x")))
+    and parse_row(row: csv.Line(number: 8, content: "2026-02-30,food,Lunch,1"))
+      == Err(
+        error: Problem(
+          line: 8,
+          reason: Reason.BadDate(
+            given: "2026-02-30",
+            error: date.DateError.DayOutOfRange(day: 30, length: 28),
+          ),
+        ),
+      )
+    and parse_row(row: csv.Line(number: 9, content: "2026-10-03,,Lunch,1"))
+      == Err(error: Problem(line: 9, reason: Reason.EmptyCategory))
+    and parse_row(row: csv.Line(number: 10, content: "2026-10-03,pets,Lunch,1"))
+      == Err(
+        error: Problem(line: 10, reason: Reason.UnknownCategory(name: "pets")),
+      )
+    and parse_row(row: csv.Line(number: 11, content: "2026-10-03,food,,1"))
+      == Err(error: Problem(line: 11, reason: Reason.EmptyDescription))
+}

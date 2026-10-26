@@ -1,0 +1,298 @@
+// Lexer: turns one line of text into tokens that remember where they came from.
+// Columns count from 1 and refer to the original line, so error messages can point at them.
+module minicalc.token;
+
+import std.int;
+import std.list;
+import std.text;
+
+// What a token is. `End` is added once, after the last real token, so the parser always
+// has something to look at, and "unexpected end of input" has a column to report.
+pub variant Kind {
+  Assign,
+  Caret,
+  Comma,
+  End,
+  Identifier(name: String),
+  LeftParen,
+  Minus,
+  Number(value: Int),
+  Percent,
+  Plus,
+  RightParen,
+  Slash,
+  Star,
+}
+
+pub variant LexError {
+  UnexpectedCharacter(character: String, column: Int),
+}
+
+// `text` is the exact slice of the source that the token was read from (empty for End).
+pub record Token {
+  column: Int,
+  kind: Kind,
+  text: String,
+}
+
+// The end of the digits that start at `start`. The first character is already known to
+// be a digit, so the scan starts one further on and the result is always past `start`.
+// That is the progress fact the main loop of `lex` needs for its `decreases`.
+fn digits_end(characters: List<String>, start: Int) -> Int {
+  requires start >= 0 and start < characters.length;
+  ensures result > start and result <= characters.length;
+
+  var index: Int = start + 1;
+  while index < characters.length and is_digit(character: characters[index]) {
+    invariant index > start and index <= characters.length;
+    decreases characters.length - index;
+
+    index = index + 1;
+  }
+  index
+}
+
+example digits_end_stops_at_the_first_other_character for digits_end {
+  digits_end(characters: ["1", "2", "+", "3"], start: 0) == 2
+    and digits_end(characters: ["1", "2", "+", "3"], start: 3) == 4
+}
+
+pub fn is_digit(character: String) -> Bool {
+  character >= "0" and character <= "9"
+}
+
+example is_digit_examples for is_digit {
+  is_digit(character: "7") and not is_digit(character: "x")
+}
+
+// Identifiers are snake_case: lower-case letters, digits and underscores. Upper-case
+// letters are accepted too, so that a typo like `Total` gives "unknown variable".
+pub fn is_letter(character: String) -> Bool {
+  (character >= "a" and character <= "z")
+    or (character >= "A" and character <= "Z")
+    or character == "_"
+}
+
+example is_letter_examples for is_letter {
+  is_letter(character: "q")
+    and is_letter(character: "_")
+    and not is_letter(character: "5")
+}
+
+// Splits a line into tokens, or reports the first character that is not part of the
+// language. A `var` list that grows in a loop is the usual way to build the result.
+pub fn lex(source: String) -> Result<List<Token>, LexError> {
+  let characters = text.chars(of: source);
+  var tokens: List<Token> = [];
+  var index: Int = 0;
+  while index < characters.length {
+    invariant index >= 0 and index <= characters.length;
+    decreases characters.length - index;
+
+    let character = characters[index];
+    if text.is_space(of: character) {
+      index = index + 1;
+    } else if is_digit(character: character) {
+      let end = digits_end(characters: characters, start: index);
+      let digits = piece(characters: characters, from: index, to: end);
+      tokens = tokens
+        ++ [
+          Token(
+            column: index + 1,
+            kind: Kind.Number(value: number_from(digits: digits)),
+            text: digits,
+          ),
+        ];
+      index = end;
+    } else if is_letter(character: character) {
+      let end = word_end(characters: characters, start: index);
+      let word = piece(characters: characters, from: index, to: end);
+      tokens = tokens
+        ++ [
+          Token(
+            column: index + 1,
+            kind: Kind.Identifier(name: word),
+            text: word,
+          ),
+        ];
+      index = end;
+    } else {
+      match symbol_kind(character: character) {
+        Some(value: kind) => {
+          tokens = tokens
+            ++ [Token(column: index + 1, kind: kind, text: character)];
+          index = index + 1;
+        },
+        None => {
+          return Err(
+            error: LexError.UnexpectedCharacter(
+              character: character,
+              column: index + 1,
+            ),
+          );
+        },
+      }
+    }
+  }
+  Ok(
+    value: tokens
+      ++ [Token(column: characters.length + 1, kind: Kind.End, text: "")],
+  )
+}
+
+example lex_of_an_empty_line_is_only_the_end for lex {
+  lex(source: "") == Ok(value: [Token(column: 1, kind: Kind.End, text: "")])
+}
+
+example lex_reads_numbers_names_and_symbols for lex {
+  lex(source: "x=12*y")
+    == Ok(
+      value: [
+        Token(column: 1, kind: Kind.Identifier(name: "x"), text: "x"),
+        Token(column: 2, kind: Kind.Assign, text: "="),
+        Token(column: 3, kind: Kind.Number(value: 12), text: "12"),
+        Token(column: 5, kind: Kind.Star, text: "*"),
+        Token(column: 6, kind: Kind.Identifier(name: "y"), text: "y"),
+        Token(column: 7, kind: Kind.End, text: ""),
+      ],
+    )
+}
+
+example lex_reports_the_column_of_a_bad_character for lex {
+  lex(source: "1 + $2")
+    == Err(error: LexError.UnexpectedCharacter(character: "$", column: 5))
+}
+
+example lex_skips_spaces_and_tabs for lex {
+  lex(source: "  1 \t+ 2")
+    == Ok(
+      value: [
+        Token(column: 3, kind: Kind.Number(value: 1), text: "1"),
+        Token(column: 6, kind: Kind.Plus, text: "+"),
+        Token(column: 8, kind: Kind.Number(value: 2), text: "2"),
+        Token(column: 9, kind: Kind.End, text: ""),
+      ],
+    )
+}
+
+// Lexing loses only white space: joining the token texts gives the source without spaces.
+property lexing_loses_only_white_space for lex(source: String) {
+  match lex(source: source) {
+    Ok(value: tokens) => text.join(
+      parts: list.map(
+        items: tokens,
+        apply: fn(found: Token) -> String {
+          found.text
+        },
+      ),
+      separator: "",
+    )
+      == without_spaces(source: source),
+    Err(error: _) => true,
+  }
+}
+
+// Every token knows where it starts, so cutting the source at that column gives back
+// exactly the text of the token. The End token has empty text and sits just past the line.
+property token_columns_point_into_the_source for lex(source: String) {
+  match lex(source: source) {
+    Ok(value: tokens) => list.all(
+      items: tokens,
+      test: fn(found: Token) -> Bool {
+        text.slice(
+          of: source,
+          from: found.column - 1,
+          to: found.column - 1 + found.text.length,
+        )
+          == found.text
+      },
+    ),
+    Err(error: _) => true,
+  }
+}
+
+fn number_from(digits: String) -> Int {
+  match int.parse(text: digits) {
+    Some(value: number) => number,
+    None => 0,
+  }
+}
+
+example number_from_reads_digits_and_leading_zeros for number_from {
+  number_from(digits: "42") == 42 and number_from(digits: "007") == 7
+}
+
+// The characters from `from` up to (not including) `to`, as one string.
+fn piece(characters: List<String>, from: Int, to: Int) -> String {
+  requires from >= 0 and from <= to and to <= characters.length;
+
+  text.join(
+    parts: list.slice(items: characters, from: from, to: to),
+    separator: "",
+  )
+}
+
+example piece_joins_a_slice for piece {
+  piece(characters: ["a", "b", "c", "d"], from: 1, to: 3) == "bc"
+}
+
+// The one-character tokens. Anything else is not part of the language.
+fn symbol_kind(character: String) -> Option<Kind> {
+  match character {
+    "%" => Some(value: Kind.Percent),
+    "(" => Some(value: Kind.LeftParen),
+    ")" => Some(value: Kind.RightParen),
+    "*" => Some(value: Kind.Star),
+    "+" => Some(value: Kind.Plus),
+    "," => Some(value: Kind.Comma),
+    "-" => Some(value: Kind.Minus),
+    "/" => Some(value: Kind.Slash),
+    "=" => Some(value: Kind.Assign),
+    "^" => Some(value: Kind.Caret),
+    _ => None,
+  }
+}
+
+example symbol_kind_knows_the_operators for symbol_kind {
+  symbol_kind(character: "^") == Some(value: Kind.Caret)
+    and symbol_kind(character: "$") == None
+}
+
+fn without_spaces(source: String) -> String {
+  text.join(
+    parts: list.filter(
+      items: text.chars(of: source),
+      keep: fn(character: String) -> Bool {
+        not text.is_space(of: character)
+      },
+    ),
+    separator: "",
+  )
+}
+
+example without_spaces_drops_blanks_and_tabs for without_spaces {
+  without_spaces(source: " a \t b ") == "ab"
+}
+
+// The same helper as `digits_end`, for names: letters, digits and underscores.
+fn word_end(characters: List<String>, start: Int) -> Int {
+  requires start >= 0 and start < characters.length;
+  ensures result > start and result <= characters.length;
+
+  var index: Int = start + 1;
+  while index < characters.length
+    and (
+      is_letter(character: characters[index])
+        or is_digit(character: characters[index])
+    ) {
+    invariant index > start and index <= characters.length;
+    decreases characters.length - index;
+
+    index = index + 1;
+  }
+  index
+}
+
+example word_end_allows_digits_after_the_first_letter for word_end {
+  word_end(characters: ["a", "1", "_", "+"], start: 0) == 3
+}

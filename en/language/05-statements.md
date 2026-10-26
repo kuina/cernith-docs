@@ -193,7 +193,7 @@ for i in a..b { ... }       // from a up to but excluding b
 for i in a..=b { ... }      // from a to b inclusive
 ```
 
-`for` traverses the elements of a list, or a range of `Int`s, in order, and gives a name to each element (`_` can also be written, and so can a pattern that always matches, such as a record pattern `Point(x: a, y: b)`; a pattern that might not match is `E0305`). Both lists and ranges are finite, so a `for` always ends and needs no justification for termination. A `Map` is traversed through the list of `entries` in `std.map`. A `String` cannot be traversed directly; turn it into a `List<String>` with `text.chars`.
+`for` traverses the elements of a list, or a range of `Int`s (a range whose end is not after its start, such as `1..0`, is empty), in order, and gives a name to each element (`_` can also be written, and so can a pattern that always matches, such as a record pattern `Point(x: a, y: b)`; a pattern that might not match is `E0305`). Both lists and ranges are finite, so a `for` always ends and needs no justification for termination. A `Map` is traversed through the list of `entries` in `std.map`. A `String` cannot be traversed directly; turn it into a `List<String>` with `text.chars`.
 
 For an element that is not used, make the name `_`.
 

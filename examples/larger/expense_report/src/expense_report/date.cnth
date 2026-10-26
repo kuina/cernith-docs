@@ -1,0 +1,383 @@
+// Calendar dates (YYYY-MM-DD) that are checked for real: days per month and leap years.
+//
+// A `Date` is a record with an invariant, so a `Date` value that exists is a valid date.
+// The only ways to get one are `make` and `parse`, which return an error variant
+// instead of a defect when the numbers do not form a day.
+module expense_report.date;
+
+import std.int;
+import std.list;
+import std.text;
+
+// A record invariant is checked at every construction. It may call a `spec fn`, which
+// is pure and usable in specifications (`where`, `requires`, `ensures`) only.
+pub record Date {
+  year: Int,
+  month: Int,
+  day: Int,
+} where year >= 1
+  and year <= 9999
+  and month >= 1
+  and month <= 12
+  and day >= 1
+  and day <= days_in(year: year, month: month);
+
+pub variant DateError {
+  BadShape,
+  YearOutOfRange(year: Int),
+  MonthOutOfRange(month: Int),
+  DayOutOfRange(day: Int, length: Int),
+}
+
+// A year and a month, as used by the `--month 2026-10` option.
+pub record Month {
+  year: Int,
+  month: Int,
+} where year >= 1 and year <= 9999 and month >= 1 and month <= 12;
+
+// Whenever `make` accepts numbers, the day is between 1 and the length of the month.
+pub fn day_is_in_range(year: Int, month: Int, day: Int) -> Bool {
+  match make(year: year, month: month, day: day) {
+    Ok(value: date) => date.day >= 1
+      and date.day <= month_length(year: date.year, month: date.month),
+    Err(error: _) => true,
+  }
+}
+
+example day_is_in_range_cases for day_is_in_range {
+  day_is_in_range(year: 2024, month: 2, day: 29)
+    and day_is_in_range(year: 2026, month: 2, day: 29)
+}
+
+property valid_dates_have_a_day_in_the_month for day_is_in_range(
+  year: Int,
+  month: Int,
+  day: Int,
+) {
+  day_is_in_range(year: year, month: month, day: day)
+}
+
+// The number of days of a month, for specifications. A `spec fn` is pure, has no
+// contract of its own, and cannot be called from executable code (E0331), so
+// `month_length` below is its executable twin and its `ensures` ties the two together.
+pub spec fn days_in(year: Int, month: Int) -> Int {
+  if month == 2 {
+    if (
+      int.rem_euclid(dividend: year, divisor: 4) == 0
+        and int.rem_euclid(dividend: year, divisor: 100) != 0
+    )
+      or int.rem_euclid(dividend: year, divisor: 400) == 0 {
+      29
+    } else {
+      28
+    }
+  } else if month == 4 or month == 6 or month == 9 or month == 11 {
+    30
+  } else {
+    31
+  }
+}
+
+// A message for the error list of the report.
+pub fn describe(error: DateError) -> String {
+  match error {
+    DateError.BadShape => "is not written as YYYY-MM-DD",
+    DateError.YearOutOfRange(year: year) => "has the year "
+      ++ int.to_text(value: year)
+      ++ ", which is outside 1 to 9999",
+    DateError.MonthOutOfRange(month: month) => "has the month "
+      ++ int.to_text(value: month)
+      ++ ", which is outside 1 to 12",
+    DateError.DayOutOfRange(day: day, length: length) => "has the day "
+      ++ int.to_text(value: day)
+      ++ ", but that month has "
+      ++ int.to_text(value: length)
+      ++ " days",
+  }
+}
+
+example describe_cases for describe {
+  describe(error: DateError.BadShape) == "is not written as YYYY-MM-DD"
+    and describe(error: DateError.DayOutOfRange(day: 30, length: 28))
+      == "has the day 30, but that month has 28 days"
+    and describe(error: DateError.MonthOutOfRange(month: 13))
+      == "has the month 13, which is outside 1 to 12"
+}
+
+// Only decimal digits: `int.parse` would also accept a leading "-".
+fn digits_to_int(source: String, width: Int) -> Option<Int> {
+  if source.length != width {
+    return None;
+  }
+  let all_digits = list.all(
+    items: text.chars(of: source),
+    test: fn(piece: String) -> Bool {
+      piece >= "0" and piece <= "9"
+    },
+  );
+  if all_digits {
+    int.parse(text: source)
+  } else {
+    None
+  }
+}
+
+example digits_to_int_cases for digits_to_int {
+  digits_to_int(source: "2026", width: 4) == Some(value: 2026)
+    and digits_to_int(source: "07", width: 2) == Some(value: 7)
+    and digits_to_int(source: "-7", width: 2) == None
+    and digits_to_int(source: "7", width: 2) == None
+    and digits_to_int(source: "1x", width: 2) == None
+}
+
+// True when `first` is a day before `second`: compare year, then month, then day.
+pub fn earlier(first: Date, second: Date) -> Bool {
+  if first.year != second.year {
+    first.year < second.year
+  } else if first.month != second.month {
+    first.month < second.month
+  } else {
+    first.day < second.day
+  }
+}
+
+example earlier_compares_year_month_day for earlier {
+  earlier(
+    first: Date(year: 2025, month: 12, day: 31),
+    second: Date(year: 2026, month: 1, day: 1),
+  )
+    and earlier(
+      first: Date(year: 2026, month: 1, day: 9),
+      second: Date(year: 2026, month: 1, day: 10),
+    )
+    and not earlier(
+      first: Date(year: 2026, month: 1, day: 10),
+      second: Date(year: 2026, month: 1, day: 10),
+    )
+}
+
+// The text of a date, "2026-10-03". The year is padded to four digits so that `parse`
+// reads the text back.
+pub fn format(date: Date) -> String {
+  text.pad_start(of: int.to_text(value: date.year), width: 4, fill: "0")
+    ++ "-"
+    ++ two_digits(number: date.month)
+    ++ "-"
+    ++ two_digits(number: date.day)
+}
+
+example format_pads_short_years for format {
+  format(date: Date(year: 987, month: 1, day: 5)) == "0987-01-05"
+}
+
+example format_pads_to_two_digits for format {
+  format(date: Date(year: 2026, month: 10, day: 3)) == "2026-10-03"
+    and format(date: Date(year: 2026, month: 1, day: 31)) == "2026-01-31"
+}
+
+// "2026-10" is the key used to group expenses by month. Years below 1000 are padded.
+pub fn format_month(month: Month) -> String {
+  text.pad_start(of: int.to_text(value: month.year), width: 4, fill: "0")
+    ++ "-"
+    ++ two_digits(number: month.month)
+}
+
+example format_month_cases for format_month {
+  format_month(month: Month(year: 2026, month: 3)) == "2026-03"
+    and format_month(month: Month(year: 987, month: 11)) == "0987-11"
+}
+
+// The Gregorian rule, as a specification: every 4th year, except every 100th, but every 400th again.
+pub fn is_leap(year: Int) -> Bool {
+  ensures result == leap_year(year: year);
+
+  (
+    int.rem_euclid(dividend: year, divisor: 4) == 0
+      and int.rem_euclid(dividend: year, divisor: 100) != 0
+  )
+    or int.rem_euclid(dividend: year, divisor: 400) == 0
+}
+
+example leap_years for is_leap {
+  is_leap(year: 2024)
+    and is_leap(year: 2000)
+    and not is_leap(year: 1900)
+    and not is_leap(year: 2026)
+    and is_leap(year: 1600)
+}
+
+// The leap-year rule for specifications; `is_leap` is its executable twin.
+pub spec fn leap_year(year: Int) -> Bool {
+  (
+    int.rem_euclid(dividend: year, divisor: 4) == 0
+      and int.rem_euclid(dividend: year, divisor: 100) != 0
+  )
+    or int.rem_euclid(dividend: year, divisor: 400) == 0
+}
+
+// Checks the numbers one at a time and reports the first one that is out of range.
+pub fn make(year: Int, month: Int, day: Int) -> Result<Date, DateError> {
+  if year < 1 or year > 9999 {
+    return Err(error: DateError.YearOutOfRange(year: year));
+  }
+  if month < 1 or month > 12 {
+    return Err(error: DateError.MonthOutOfRange(month: month));
+  }
+  let length = month_length(year: year, month: month);
+  if day < 1 or day > length {
+    return Err(error: DateError.DayOutOfRange(day: day, length: length));
+  }
+  Ok(value: Date(year: year, month: month, day: day))
+}
+
+example make_checks_each_number for make {
+  make(year: 2026, month: 13, day: 1)
+    == Err(error: DateError.MonthOutOfRange(month: 13))
+    and make(year: 2026, month: 4, day: 31)
+      == Err(error: DateError.DayOutOfRange(day: 31, length: 30))
+    and make(year: 2026, month: 4, day: 0)
+      == Err(error: DateError.DayOutOfRange(day: 0, length: 30))
+    and make(year: 0, month: 1, day: 1)
+      == Err(error: DateError.YearOutOfRange(year: 0))
+}
+
+example make_checks_leap_days for make {
+  make(year: 2024, month: 2, day: 29)
+    == Ok(value: Date(year: 2024, month: 2, day: 29))
+    and make(year: 2026, month: 2, day: 29)
+      == Err(error: DateError.DayOutOfRange(day: 29, length: 28))
+    and make(year: 1900, month: 2, day: 29)
+      == Err(error: DateError.DayOutOfRange(day: 29, length: 28))
+    and make(year: 2000, month: 2, day: 29)
+      == Ok(value: Date(year: 2000, month: 2, day: 29))
+}
+
+// The number of days of a month. The precondition is real: a month outside 1 to 12 has
+// no length. The postconditions say the result is what `days_in` says, and that every
+// month has 28 to 31 days.
+pub fn month_length(year: Int, month: Int) -> Int {
+  requires month >= 1 and month <= 12;
+  ensures result == days_in(year: year, month: month);
+  ensures result >= 28 and result <= 31;
+
+  if month == 2 {
+    if is_leap(year: year) {
+      29
+    } else {
+      28
+    }
+  } else if month == 4 or month == 6 or month == 9 or month == 11 {
+    30
+  } else {
+    31
+  }
+}
+
+example month_lengths for month_length {
+  month_length(year: 2026, month: 2) == 28
+    and month_length(year: 2024, month: 2) == 29
+    and month_length(year: 2026, month: 4) == 30
+    and month_length(year: 2026, month: 12) == 31
+}
+
+// The month of a date.
+pub fn month_of(date: Date) -> Month {
+  Month(year: date.year, month: date.month)
+}
+
+example month_of_drops_the_day for month_of {
+  month_of(date: Date(year: 2026, month: 10, day: 3))
+    == Month(year: 2026, month: 10)
+}
+
+// "2026-10-03" becomes a Date; "2026-02-30" and "2026-1-3" are errors.
+pub fn parse(source: String) -> Result<Date, DateError> {
+  let parts = text.split(of: source, separator: "-");
+  if parts.length != 3 {
+    return Err(error: DateError.BadShape);
+  }
+  match digits_to_int(source: parts[0], width: 4) {
+    None => Err(error: DateError.BadShape),
+    Some(value: year) => match digits_to_int(source: parts[1], width: 2) {
+      None => Err(error: DateError.BadShape),
+      Some(value: month) => match digits_to_int(source: parts[2], width: 2) {
+        None => Err(error: DateError.BadShape),
+        Some(value: day) => make(year: year, month: month, day: day),
+      },
+    },
+  }
+}
+
+example parse_cases for parse {
+  parse(source: "2026-10-03") == Ok(value: Date(year: 2026, month: 10, day: 3))
+    and parse(source: "2026-02-30")
+      == Err(error: DateError.DayOutOfRange(day: 30, length: 28))
+    and parse(source: "2026-1-3") == Err(error: DateError.BadShape)
+    and parse(source: "yesterday") == Err(error: DateError.BadShape)
+    and parse(source: "2026-10-03-01") == Err(error: DateError.BadShape)
+    and parse(source: "2026-00-10")
+      == Err(error: DateError.MonthOutOfRange(month: 0))
+}
+
+// "2026-10" for the `--month` option. A month is a date with the day 1, so it is
+// parsed with the same function and keeps the same error variants.
+pub fn parse_month(source: String) -> Result<Month, DateError> {
+  match parse(source: source ++ "-01") {
+    Ok(value: date) => Ok(value: month_of(date: date)),
+    Err(error: error) => Err(error: error),
+  }
+}
+
+example parse_month_cases for parse_month {
+  parse_month(source: "2026-10") == Ok(value: Month(year: 2026, month: 10))
+    and parse_month(source: "2026-13")
+      == Err(error: DateError.MonthOutOfRange(month: 13))
+    and parse_month(source: "2026") == Err(error: DateError.BadShape)
+    and parse_month(source: "2026-10-03") == Err(error: DateError.BadShape)
+}
+
+// Printing a date and reading it back gives the same date.
+pub fn print_then_parse(year: Int, month: Int, day: Int) -> Bool {
+  match make(year: year, month: month, day: day) {
+    Ok(value: date) => parse(source: format(date: date)) == Ok(value: date),
+    Err(error: _) => true,
+  }
+}
+
+example print_then_parse_cases for print_then_parse {
+  print_then_parse(year: 2026, month: 10, day: 3)
+    and print_then_parse(year: 987, month: 1, day: 5)
+    and print_then_parse(year: 2026, month: 2, day: 30)
+}
+
+property format_then_parse_is_the_identity for print_then_parse(
+  year: Int,
+  month: Int,
+  day: Int,
+) {
+  print_then_parse(year: year, month: month, day: day)
+}
+
+// True when the date falls into the month.
+pub fn same_month(date: Date, month: Month) -> Bool {
+  month_of(date: date) == month
+}
+
+example same_month_cases for same_month {
+  same_month(
+    date: Date(year: 2026, month: 10, day: 31),
+    month: Month(year: 2026, month: 10),
+  )
+    and not same_month(
+      date: Date(year: 2025, month: 10, day: 31),
+      month: Month(year: 2026, month: 10),
+    )
+}
+
+fn two_digits(number: Int) -> String {
+  text.pad_start(of: int.to_text(value: number), width: 2, fill: "0")
+}
+
+example two_digits_pads for two_digits {
+  two_digits(number: 7) == "07" and two_digits(number: 12) == "12"
+}

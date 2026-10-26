@@ -1,0 +1,210 @@
+// Drawing a game as lines of text.
+// Pure functions from a board and a state to a list of strings; the entry module decides
+// where the lines go. The symbols are the same as in the level format, so a drawn board
+// can be pasted back as a level.
+module sokoban.render;
+
+import sokoban.board;
+import sokoban.moves;
+import sokoban.point;
+import sokoban.samples;
+import std.int;
+import std.list;
+import std.text;
+
+// The whole board, one string per row. One line for every row of the grid.
+pub fn board_lines(grid: board.Board, state: moves.State) -> List<String> {
+  ensures result.length == grid.rows.length;
+
+  var lines: List<String> = [];
+  for row in 0..grid.rows.length {
+    invariant lines.length == row;
+
+    lines = lines ++ [row_text(grid: grid, state: state, row: row)];
+  }
+  lines
+}
+
+example board_lines_draws_every_row for board_lines {
+  match samples.tiny() {
+    Some(value: puzzle) => board_lines(
+      grid: puzzle.grid,
+      state: moves.initial(puzzle: puzzle),
+    )
+      == ["#####", "#@$.#", "#####"],
+    None => false,
+  }
+}
+
+// The character for one cell: the ground, with the player or a box drawn on top.
+// A box and the player never share a cell, so the two checks cannot both be true.
+pub fn cell_char(
+  grid: board.Board,
+  state: moves.State,
+  spot: point.Point,
+) -> String {
+  ensures result.length == 1;
+
+  let ground = board.tile_at(grid: grid, spot: spot);
+  let crate = list.contains(items: state.boxes, item: spot);
+  let here = state.player == spot;
+  match ground {
+    board.Tile.Goal => if crate {
+      "*"
+    } else if here {
+      "+"
+    } else {
+      "."
+    },
+    board.Tile.Floor => if crate {
+      "$"
+    } else if here {
+      "@"
+    } else {
+      " "
+    },
+    board.Tile.Wall => "#",
+  }
+}
+
+example cell_char_draws_the_things_on_the_ground for cell_char {
+  match samples.tiny() {
+    Some(value: puzzle) => {
+      let start = moves.initial(puzzle: puzzle);
+      cell_char(
+        grid: puzzle.grid,
+        state: start,
+        spot: point.Point(row: 1, col: 1),
+      )
+        == "@"
+        and cell_char(
+          grid: puzzle.grid,
+          state: start,
+          spot: point.Point(row: 1, col: 2),
+        )
+          == "$"
+        and cell_char(
+          grid: puzzle.grid,
+          state: start,
+          spot: point.Point(row: 1, col: 3),
+        )
+          == "."
+        and cell_char(
+          grid: puzzle.grid,
+          state: start,
+          spot: point.Point(row: 0, col: 0),
+        )
+          == "#"
+    },
+    None => false,
+  }
+}
+
+// Board and status line together, ready to print.
+pub fn frame(grid: board.Board, state: moves.State) -> List<String> {
+  ensures result.length == grid.rows.length + 1;
+
+  board_lines(grid: grid, state: state)
+    ++ [
+      status_line(
+        state: state,
+        solved: moves.is_solved(grid: grid, state: state),
+      ),
+    ]
+}
+
+example frame_after_the_winning_push for frame {
+  match samples.tiny() {
+    Some(value: puzzle) => frame(
+      grid: puzzle.grid,
+      state: moves.walk(
+        grid: puzzle.grid,
+        state: moves.initial(puzzle: puzzle),
+        path: [point.Direction.Right],
+      ),
+    )
+      == ["#####", "# @*#", "#####", "moves: 1, pushes: 1 - SOLVED"],
+    None => false,
+  }
+}
+
+// Law: whatever the player does, the drawing shows each box once and the player once
+// (a box on a goal is `*`, the player on a goal is `+`). Nothing is drawn twice or lost.
+property the_drawing_shows_every_piece_once for frame(
+  path: List<point.Direction>,
+) {
+  match samples.room() {
+    None => false,
+    Some(value: puzzle) => {
+      let state = moves.walk(
+        grid: puzzle.grid,
+        state: moves.initial(puzzle: puzzle),
+        path: path,
+      );
+      let drawing = text.join(
+        parts: board_lines(grid: puzzle.grid, state: state),
+        separator: "\n",
+      );
+      text.count(of: drawing, part: "$") + text.count(of: drawing, part: "*")
+        == 2
+        and text.count(of: drawing, part: "@")
+          + text.count(of: drawing, part: "+")
+          == 1
+    },
+  }
+}
+
+// One drawn row. Trailing spaces are cut off, the same way level texts are written.
+// The `requires` is what lets the checker accept `grid.rows[row]`.
+pub fn row_text(grid: board.Board, state: moves.State, row: Int) -> String {
+  requires row >= 0 and row < grid.rows.length;
+
+  var drawn: String = "";
+  for col in 0..grid.rows[row].length {
+    drawn = drawn
+      ++ cell_char(
+        grid: grid,
+        state: state,
+        spot: point.Point(row: row, col: col),
+      );
+  }
+  text.trim_end(of: drawn)
+}
+
+example row_text_cuts_trailing_spaces for row_text {
+  match samples.tiny() {
+    Some(value: puzzle) => row_text(
+      grid: puzzle.grid,
+      state: moves.initial(puzzle: puzzle),
+      row: 1,
+    )
+      == "#@$.#",
+    None => false,
+  }
+}
+
+// The line under a board: the counters, and SOLVED once every box is home.
+pub fn status_line(state: moves.State, solved: Bool) -> String {
+  let counters = "moves: "
+    ++ int.to_text(value: state.moves)
+    ++ ", pushes: "
+    ++ int.to_text(value: state.pushes);
+  if solved {
+    counters ++ " - SOLVED"
+  } else {
+    counters
+  }
+}
+
+example status_line_shows_counters for status_line {
+  match samples.tiny() {
+    Some(value: puzzle) => status_line(
+      state: moves.initial(puzzle: puzzle),
+      solved: false,
+    )
+      == "moves: 0, pushes: 0"
+      and status_line(state: moves.initial(puzzle: puzzle), solved: true)
+        == "moves: 0, pushes: 0 - SOLVED",
+    None => false,
+  }
+}

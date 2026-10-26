@@ -100,7 +100,7 @@ pub fn absolute(value: Int) -> Int {
 | 仕様 | `requires`、`ensures`、`decreases`、`invariant`、`where`、`spec fn` の本体 | コードに加えて、量化子、`spec fn` の呼び出し、`result`、`self` |
 | テスト | `example`、`property` の本体 | コードと仕様の両方 |
 
-コードの中に量化子や `spec fn` の呼び出しを書くとエラー（`E0332`、`E0331`）です。`result` を `ensures` の外に、`self` を `where` の外に書くと `E0313` です。仕様のための構文は、実行時には存在しません。
+コードの中に量化子や `spec fn` の呼び出しを書くとエラー（`E0332`、`E0331`）です。`result` を `ensures` の外に、`self` を `where` の外に書くと `E0313` です。仕様のための構文はコードではありませんが、チェッカーが証明していない条件は、量化子や `spec fn` の呼び出しを含めて、プログラムの実行時にも評価され、違反は欠陥です。
 
 ### 量化子
 

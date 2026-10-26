@@ -1,0 +1,505 @@
+// Parser: tokens to a syntax tree, by precedence climbing.
+//
+// `parse_expr` reads the start of an expression (a number, a name, a call, a group, or a
+// unary minus) and hands it to `parse_rest`, which keeps folding binary operators onto it.
+// Both take the weakest operator they may still consume (`min_precedence`), and they call
+// each other and themselves, so they need a termination argument.
+//
+// The measure is `remaining`: how many tokens are still unread at a position. Every call
+// starts after at least one consumed token (an operator, a `(`, a unary minus, a `,`), so
+// it strictly shrinks. How does the checker know that a call that continues after an
+// earlier call really starts later? Each result says how many tokens it used, and the
+// `where` clause of `Parsed`, `Rest` and `Arguments` states a lower bound for that
+// number. A restriction of a type holds for every value, so no `ensures` is needed.
+module minicalc.parser;
+
+import minicalc.ast as ast;
+import minicalc.token as token;
+import std.int;
+
+// The arguments of a call, in order, and how many tokens they took, counting the `)`.
+pub record Arguments {
+  items: List<ast.Expr>,
+  used: Int,
+} where used >= 1;
+
+pub variant ParseError {
+  MissingParen(column: Int),
+  UnexpectedEnd(column: Int),
+  UnexpectedToken(column: Int, text: String),
+}
+
+// An expression and how many tokens it was read from. Never zero: an expression starts
+// with a token of its own.
+pub record Parsed {
+  expr: ast.Expr,
+  used: Int,
+} where used >= 1;
+
+// What `parse_rest` returns: the expression with the operators folded on, and how many
+// tokens those operators and their operands took (zero if the next token ends it).
+pub record Rest {
+  expr: ast.Expr,
+  used: Int,
+} where used >= 0;
+
+// The name and the column of `name = ...`.
+record Target {
+  column: Int,
+  name: String,
+}
+
+fn argument_count(source: String) -> String {
+  match parse_arguments(tokens: lexed(source: source), start: 2) {
+    Ok(value: found) => column_text(column: found.items.length)
+      ++ " args, "
+      ++ column_text(column: found.used)
+      ++ " tokens",
+    Err(error: _) => "failed",
+  }
+}
+
+// The name and the column of the target, if the line starts like `name =`.
+fn assignment_target(tokens: List<token.Token>) -> Option<Target> {
+  ensures match result {
+    Some(value: _) => tokens.length >= 2,
+    None => true,
+  };
+
+  if tokens.length >= 2 and tokens[1].kind == token.Kind.Assign {
+    match tokens[0].kind {
+      token.Kind.Identifier(name: name) => Some(
+        value: Target(column: tokens[0].column, name: name),
+      ),
+      _ => None,
+    }
+  } else {
+    None
+  }
+}
+
+example assignment_target_needs_a_name_and_an_equals_sign for assignment_target {
+  assignment_target(tokens: lexed(source: "x = 1"))
+    == Some(value: Target(column: 1, name: "x"))
+    and assignment_target(tokens: lexed(source: "x + 1")) == None
+    and assignment_target(tokens: lexed(source: "1 = 1")) == None
+}
+
+// The operator a token stands for, if it is a binary operator.
+fn binary_of(kind: token.Kind) -> Option<ast.BinOp> {
+  match kind {
+    token.Kind.Caret => Some(value: ast.BinOp.Pow),
+    token.Kind.Minus => Some(value: ast.BinOp.Sub),
+    token.Kind.Percent => Some(value: ast.BinOp.Mod),
+    token.Kind.Plus => Some(value: ast.BinOp.Add),
+    token.Kind.Slash => Some(value: ast.BinOp.Div),
+    token.Kind.Star => Some(value: ast.BinOp.Mul),
+    _ => None,
+  }
+}
+
+example binary_of_knows_the_operator_tokens for binary_of {
+  binary_of(kind: token.Kind.Star) == Some(value: ast.BinOp.Mul)
+    and binary_of(kind: token.Kind.LeftParen) == None
+}
+
+fn column_text(column: Int) -> String {
+  int.to_text(value: column)
+}
+
+// Where an "unexpected end" is reported: the column of the last token, which is the End
+// token that `token.lex` always appends.
+fn end_column(tokens: List<token.Token>) -> Int {
+  if tokens.length == 0 {
+    1
+  } else {
+    tokens[tokens.length - 1].column
+  }
+}
+
+example end_column_is_the_column_of_the_last_token for end_column {
+  end_column(tokens: []) == 1
+    and end_column(
+      tokens: [token.Token(column: 4, kind: token.Kind.End, text: "")],
+    )
+      == 4
+}
+
+// After a complete statement only the End token may be left.
+fn expect_end(
+  tokens: List<token.Token>,
+  position: Int,
+) -> Result<Unit, ParseError> {
+  requires position >= 0;
+
+  if position >= tokens.length {
+    Ok(value: ())
+  } else if tokens[position].kind == token.Kind.End {
+    Ok(value: ())
+  } else {
+    Err(error: unexpected(found: tokens[position]))
+  }
+}
+
+// A readable form of the outcome of a failed parse, so that examples are one line each.
+fn fail_line(source: String) -> String {
+  match parse_line(tokens: lexed(source: source)) {
+    Ok(value: _) => "parsed",
+    Err(error: ParseError.MissingParen(column: column)) => "paren at "
+      ++ column_text(column: column),
+    Err(error: ParseError.UnexpectedEnd(column: column)) => "end at "
+      ++ column_text(column: column),
+    Err(
+      error: ParseError.UnexpectedToken(column: column, text: found),
+    ) => "unexpected " ++ found ++ " at " ++ column_text(column: column),
+  }
+}
+
+// Tokens of a source line that is known to lex; an empty list stands in for a lexer error.
+fn lexed(source: String) -> List<token.Token> {
+  match token.lex(source: source) {
+    Ok(value: tokens) => tokens,
+    Err(error: _) => [],
+  }
+}
+
+// Reads the arguments of a call. `start` is the position right after the `(`. An
+// argument is a full expression; after it comes a `,` (another argument follows) or the
+// `)` that ends the list. A `while` loop with a `decreases` suits this: every pass
+// consumes the argument and its separator.
+//
+// A lexicographic measure: the first part is the same quantity as in `parse_expr`; the
+// second part breaks the tie when this function calls `parse_expr` at the very position
+// where it was entered (the first argument). `parse_expr` has the smaller second part.
+fn parse_arguments(
+  tokens: List<token.Token>,
+  start: Int,
+) -> Result<Arguments, ParseError> {
+  requires start >= 0;
+  decreases remaining(tokens: tokens, position: start);
+  decreases 2;
+
+  var arguments: List<ast.Expr> = [];
+  var at: Int = start;
+  var open: Bool = true;
+  if at < tokens.length and tokens[at].kind == token.Kind.RightParen {
+    at = at + 1;
+    open = false;
+  }
+  while open {
+    invariant at >= start and (open or at > start);
+    decreases remaining(tokens: tokens, position: at);
+
+    if at >= tokens.length {
+      return Err(
+        error: ParseError.MissingParen(column: end_column(tokens: tokens)),
+      );
+    }
+    let argument = parse_expr(tokens: tokens, pos: at, min_precedence: 1)?;
+    arguments = arguments ++ [argument.expr];
+    at = at + argument.used;
+    if at >= tokens.length {
+      return Err(
+        error: ParseError.MissingParen(column: end_column(tokens: tokens)),
+      );
+    }
+    match tokens[at].kind {
+      token.Kind.Comma => {
+        at = at + 1;
+      },
+      token.Kind.RightParen => {
+        at = at + 1;
+        open = false;
+      },
+      _ => {
+        return Err(error: ParseError.MissingParen(column: tokens[at].column));
+      },
+    }
+  }
+  Ok(value: Arguments(items: arguments, used: at - start))
+}
+
+example parse_arguments_collects_the_list for parse_arguments {
+  argument_count(source: "f(1, 2 + 3, x)") == "3 args, 8 tokens"
+    and argument_count(source: "f()") == "0 args, 1 tokens"
+    and argument_count(source: "f(1,)") == "failed"
+}
+
+// The first expression of a line or a group, then whatever binary operators follow.
+// A prefix is one of:
+//   - a number or a name;
+//   - a name followed by `(`: a call;
+//   - `(` expression `)`;
+//   - `-` and an operand that may contain only `^`. That is what makes `-2 ^ 2` mean
+//     `-(2 ^ 2)` while `-2 * 3` means `(-2) * 3`.
+//
+// The first guard makes `pos < tokens.length` known for the rest of the body, so the
+// accesses `tokens[pos]` are provably in range.
+fn parse_expr(
+  tokens: List<token.Token>,
+  pos: Int,
+  min_precedence: Int,
+) -> Result<Parsed, ParseError> {
+  requires pos >= 0 and min_precedence >= 1;
+  decreases remaining(tokens: tokens, position: pos);
+  decreases 1;
+
+  if pos >= tokens.length {
+    return Err(
+      error: ParseError.UnexpectedEnd(column: end_column(tokens: tokens)),
+    );
+  }
+  let first = tokens[pos];
+  match first.kind {
+    token.Kind.Number(value: value) => {
+      let rest = parse_rest(
+        tokens: tokens,
+        min_precedence: min_precedence,
+        left: ast.Expr.Num(value: value),
+        cursor: pos + 1,
+      )?;
+      Ok(value: Parsed(expr: rest.expr, used: 1 + rest.used))
+    },
+    token.Kind.Minus => {
+      let operand = parse_expr(
+        tokens: tokens,
+        pos: pos + 1,
+        min_precedence: 3,
+      )?;
+      let rest = parse_rest(
+        tokens: tokens,
+        min_precedence: min_precedence,
+        left: ast.Expr.Neg(operand: operand.expr),
+        cursor: pos + 1 + operand.used,
+      )?;
+      Ok(value: Parsed(expr: rest.expr, used: 1 + operand.used + rest.used))
+    },
+    token.Kind.LeftParen => {
+      let inner = parse_expr(tokens: tokens, pos: pos + 1, min_precedence: 1)?;
+      let close = pos + 1 + inner.used;
+      if close >= tokens.length {
+        return Err(
+          error: ParseError.MissingParen(column: end_column(tokens: tokens)),
+        );
+      }
+      if tokens[close].kind != token.Kind.RightParen {
+        return Err(
+          error: ParseError.MissingParen(column: tokens[close].column),
+        );
+      }
+      let rest = parse_rest(
+        tokens: tokens,
+        min_precedence: min_precedence,
+        left: inner.expr,
+        cursor: close + 1,
+      )?;
+      Ok(value: Parsed(expr: rest.expr, used: 2 + inner.used + rest.used))
+    },
+    token.Kind.Identifier(name: name) => if pos + 1 < tokens.length
+      and tokens[pos + 1].kind == token.Kind.LeftParen {
+      let found = parse_arguments(tokens: tokens, start: pos + 2)?;
+      let rest = parse_rest(
+        tokens: tokens,
+        min_precedence: min_precedence,
+        left: ast.call(
+          name: name,
+          column: first.column,
+          arguments: found.items,
+        ),
+        cursor: pos + 2 + found.used,
+      )?;
+      Ok(value: Parsed(expr: rest.expr, used: 2 + found.used + rest.used))
+    } else {
+      let rest = parse_rest(
+        tokens: tokens,
+        min_precedence: min_precedence,
+        left: ast.Expr.Var(name: name, column: first.column),
+        cursor: pos + 1,
+      )?;
+      Ok(value: Parsed(expr: rest.expr, used: 1 + rest.used))
+    },
+    token.Kind.End => Err(
+      error: ParseError.UnexpectedEnd(column: first.column),
+    ),
+    _ => Err(error: unexpected(found: first)),
+  }
+}
+
+example parse_expr_binds_power_to_the_right for parse_expr {
+  show_line(source: "2 ^ 3 ^ 2") == "(2 ^ (3 ^ 2))"
+    and show_line(source: "-2 ^ 2") == "(-(2 ^ 2))"
+    and show_line(source: "2 ^ -1") == "(2 ^ (-1))"
+    and show_line(source: "-2 * 3") == "((-2) * 3)"
+    and show_line(source: "- -x") == "(-(-x))"
+}
+
+example parse_expr_follows_the_usual_precedence for parse_expr {
+  show_line(source: "1 + 2 * 3 - 4") == "((1 + (2 * 3)) - 4)"
+    and show_line(source: "8 - 3 - 2") == "((8 - 3) - 2)"
+    and show_line(source: "(1 + 2) * 3") == "((1 + 2) * 3)"
+}
+
+example parse_expr_reads_calls_with_any_number_of_arguments for parse_expr {
+  show_line(source: "max(1, 2 + 3)") == "max(1, (2 + 3))"
+    and show_line(source: "abs(-4) % 3") == "(abs((-4)) % 3)"
+    and show_line(source: "f()") == "f(<0 args>)"
+    and show_line(source: "g(1, 2, 3)") == "g(<3 args>)"
+}
+
+example parse_expr_reports_a_missing_closing_parenthesis for parse_expr {
+  fail_line(source: "max(1, 2") == "paren at 9"
+    and fail_line(source: "max(1 2)") == "paren at 7"
+    and fail_line(source: "(1 + 2 3)") == "paren at 8"
+}
+
+// One line is either `name = expression` or a plain expression, and nothing may follow.
+pub fn parse_line(
+  tokens: List<token.Token>,
+) -> Result<ast.Statement, ParseError> {
+  if tokens.length == 0 {
+    return Ok(value: ast.Statement.Empty);
+  }
+  if tokens[0].kind == token.Kind.End {
+    return Ok(value: ast.Statement.Empty);
+  }
+  match assignment_target(tokens: tokens) {
+    Some(value: target) => {
+      let parsed = parse_expr(tokens: tokens, pos: 2, min_precedence: 1)?;
+      expect_end(tokens: tokens, position: 2 + parsed.used)?;
+      Ok(
+        value: ast.Statement.Assign(
+          name: target.name,
+          column: target.column,
+          value: parsed.expr,
+        ),
+      )
+    },
+    None => {
+      let parsed = parse_expr(tokens: tokens, pos: 0, min_precedence: 1)?;
+      expect_end(tokens: tokens, position: parsed.used)?;
+      Ok(value: ast.Statement.Eval(expr: parsed.expr))
+    },
+  }
+}
+
+example parse_line_reads_an_assignment_and_an_expression for parse_line {
+  show_line(source: "x = 1 + 2 * 3") == "x = (1 + (2 * 3))"
+    and show_line(source: "-2 ^ 2") == "(-(2 ^ 2))"
+    and show_line(source: "") == "(empty)"
+}
+
+example parse_line_reports_what_is_wrong for parse_line {
+  fail_line(source: "1 2") == "unexpected 2 at 3"
+    and fail_line(source: "1 +") == "end at 4"
+    and fail_line(source: "(1 + 2") == "paren at 7"
+    and fail_line(source: "x = y = 3") == "unexpected = at 7"
+}
+
+// Folds binary operators onto `left`, which ends just before `cursor`. While the next
+// token is an operator that binds at least as tightly as `min_precedence`, its right
+// operand is read with `parse_expr` and the result becomes the new `left`.
+//
+// A right-associative operator reads its right side with its own strength (so another
+// `^` is taken in), a left-associative one with one more (so another `-` is left for
+// the next round of this function: `8 - 3 - 2` is `(8 - 3) - 2`).
+fn parse_rest(
+  tokens: List<token.Token>,
+  min_precedence: Int,
+  left: ast.Expr,
+  cursor: Int,
+) -> Result<Rest, ParseError> {
+  requires cursor >= 0 and min_precedence >= 1;
+  decreases remaining(tokens: tokens, position: cursor);
+  decreases 1;
+
+  if cursor >= tokens.length {
+    return Ok(value: Rest(expr: left, used: 0));
+  }
+  match binary_of(kind: tokens[cursor].kind) {
+    None => Ok(value: Rest(expr: left, used: 0)),
+    Some(value: op) => {
+      let strength = ast.precedence(op: op);
+      if strength < min_precedence {
+        Ok(value: Rest(expr: left, used: 0))
+      } else {
+        let right_side = if ast.is_right_associative(op: op) {
+          strength
+        } else {
+          strength + 1
+        };
+        let right = parse_expr(
+          tokens: tokens,
+          pos: cursor + 1,
+          min_precedence: right_side,
+        )?;
+        let more = parse_rest(
+          tokens: tokens,
+          min_precedence: min_precedence,
+          left: ast.Expr.Binary(
+            op: op,
+            column: tokens[cursor].column,
+            left: left,
+            right: right.expr,
+          ),
+          cursor: cursor + 1 + right.used,
+        )?;
+        Ok(value: Rest(expr: more.expr, used: 1 + right.used + more.used))
+      }
+    },
+  }
+}
+
+example parse_rest_stops_at_a_weaker_operator for parse_rest {
+  rest_shape(source: "2 * 3 + 4", min_precedence: 2) == "(2 * 3) used 2"
+    and rest_shape(source: "2 * 3 + 4", min_precedence: 1)
+      == "((2 * 3) + 4) used 4"
+    and rest_shape(source: "2", min_precedence: 1) == "2 used 0"
+}
+
+// How many tokens are still unread at `position`; never negative, so it can be a measure
+// even for a position past the end. The first guard of each parsing function makes sure
+// that the measure is at least 1 whenever the function goes on to recurse.
+spec fn remaining(tokens: List<token.Token>, position: Int) -> Int {
+  ensures result >= 0;
+
+  if position < tokens.length {
+    tokens.length - position
+  } else {
+    0
+  }
+}
+
+// Shows the expression that `parse_rest` builds from a line, with the first number as
+// `left` and the cursor right after it, and how many tokens it used.
+fn rest_shape(source: String, min_precedence: Int) -> String {
+  requires min_precedence >= 1;
+
+  match parse_rest(
+    tokens: lexed(source: source),
+    min_precedence: min_precedence,
+    left: ast.Expr.Num(value: 2),
+    cursor: 1,
+  ) {
+    Ok(value: rest) => ast.show(expr: rest.expr)
+      ++ " used "
+      ++ column_text(column: rest.used),
+    Err(error: _) => "failed",
+  }
+}
+
+// Parses a line and shows the tree fully parenthesized, so that an example can compare
+// one string instead of spelling out nodes.
+fn show_line(source: String) -> String {
+  match parse_line(tokens: lexed(source: source)) {
+    Ok(value: ast.Statement.Assign(name: name, column: _, value: value)) => name
+      ++ " = "
+      ++ ast.show(expr: value),
+    Ok(value: ast.Statement.Empty) => "(empty)",
+    Ok(value: ast.Statement.Eval(expr: expr)) => ast.show(expr: expr),
+    Err(error: _) => "error",
+  }
+}
+
+fn unexpected(found: token.Token) -> ParseError {
+  ParseError.UnexpectedToken(column: found.column, text: found.text)
+}

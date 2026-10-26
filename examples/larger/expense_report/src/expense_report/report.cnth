@@ -1,0 +1,320 @@
+// Rendering the report as lines of text. The layout is computed from the data: the
+// width of every column comes from `table.align_left` and `table.align_right`.
+module expense_report.report;
+
+import expense_report.aggregate as aggregate;
+import expense_report.date as date;
+import expense_report.expense as expense;
+import expense_report.fixtures as fixtures;
+import expense_report.money as money;
+import expense_report.table as table;
+import std.int;
+import std.list;
+
+// Everything the report prints, already computed. `render` only lays it out.
+pub record Summary {
+  month: Option<date.Month>,
+  count: Int,
+  category_count: Int,
+  by_category: List<aggregate.Total>,
+  by_month: List<aggregate.Total>,
+  largest: List<expense.Expense>,
+  warnings: List<aggregate.Overspend>,
+  total: money.Cents,
+}
+
+fn empty_summary() -> Summary {
+  Summary(
+    month: None,
+    count: 0,
+    category_count: 0,
+    by_category: [],
+    by_month: [],
+    largest: [],
+    warnings: [],
+    total: money.from_int(value: 0),
+  )
+}
+
+// Each line is "  1. 2026-10-12  Description  amount", in a ranked list of expenses.
+fn largest_lines(records: List<expense.Expense>) -> List<String> {
+  let descriptions = table.align_left(
+    cells: list.map(
+      items: records,
+      apply: fn(item: expense.Expense) -> String {
+        item.description
+      },
+    ),
+  );
+  let amounts = table.align_right(
+    cells: list.map(
+      items: records,
+      apply: fn(item: expense.Expense) -> String {
+        money.format(amount: item.amount)
+      },
+    ),
+  );
+  var lines: List<String> = [];
+  for index in 0..records.length {
+    lines = lines
+      ++ [
+        "  "
+          ++ int.to_text(value: index + 1)
+          ++ ". "
+          ++ date.format(date: records[index].date)
+          ++ "  "
+          ++ descriptions[index]
+          ++ "  "
+          ++ amounts[index],
+      ];
+  }
+  lines
+}
+
+example largest_lines_align_description_and_amount for largest_lines {
+  largest_lines(records: fixtures.sample_records(amounts: [5, 1250]))
+    == ["  1. 2026-01-01  sample   0.05", "  2. 2026-02-01  sample  12.50"]
+}
+
+// "40%" of the total. When the total is not positive there is nothing to take a share
+// of, so the cell shows "-".
+fn percent_text(amount: money.Cents, total: money.Cents) -> String {
+  if money.to_int(amount: total) > 0 {
+    int.to_text(value: money.percent_of(part: amount, whole: total)) ++ "%"
+  } else {
+    "-"
+  }
+}
+
+example percent_text_cases for percent_text {
+  percent_text(
+    amount: money.from_int(value: 1),
+    total: money.from_int(value: 4),
+  )
+    == "25%"
+    and percent_text(
+      amount: money.from_int(value: 1),
+      total: money.from_int(value: 0),
+    )
+      == "-"
+}
+
+// The plural of a count of things: "1 expense", "2 expenses", "0 expenses".
+pub fn plural(count: Int, one: String, many: String) -> String {
+  // An `if` is an expression only at the top of an expression, so it gets its own `let`.
+  let word = if count == 1 {
+    one
+  } else {
+    many
+  };
+  int.to_text(value: count) ++ " " ++ word
+}
+
+example plural_cases for plural {
+  plural(count: 1, one: "expense", many: "expenses") == "1 expense"
+    and plural(count: 0, one: "expense", many: "expenses") == "0 expenses"
+    and plural(count: 7, one: "category", many: "categories") == "7 categories"
+}
+
+// The whole report. With no expenses only the title and a note are printed.
+pub fn render(summary: Summary) -> List<String> {
+  let title = match summary.month {
+    None => "Expense report",
+    Some(value: month) => "Expense report for "
+      ++ date.format_month(month: month),
+  };
+  if summary.count == 0 {
+    return [title, "", "No expenses to report."];
+  }
+  let counts = plural(count: summary.count, one: "expense", many: "expenses")
+    ++ " in "
+    ++ plural(
+      count: summary.category_count,
+      one: "category",
+      many: "categories",
+    );
+  let ranked = if summary.largest.length == 0 {
+    []
+  } else {
+    ["", "Largest expenses"] ++ largest_lines(records: summary.largest)
+  };
+  [title, counts, "", "By category"]
+    ++ totals_lines(
+      totals: summary.by_category,
+      total: summary.total,
+      with_share: true,
+    )
+    ++ ["", "By month"]
+    ++ totals_lines(
+      totals: summary.by_month,
+      total: summary.total,
+      with_share: false,
+    )
+    ++ ranked
+    ++ render_warnings(warnings: summary.warnings)
+    ++ ["", "Grand total: " ++ money.format(amount: summary.total)]
+}
+
+example render_lays_out_the_sections for render {
+  render(summary: small_summary())
+    == [
+      "Expense report for 2026-10",
+      "2 expenses in 2 categories",
+      "",
+      "By category",
+      "  travel  80.00  80%",
+      "  food    20.00  20%",
+      "",
+      "By month",
+      "  2026-10  100.00",
+      "",
+      "Largest expenses",
+      "  1. 2026-01-01  sample  80.00",
+      "  2. 2026-02-01  sample  20.00",
+      "",
+      "Grand total: 100.00",
+    ]
+}
+
+example render_shows_an_empty_report_briefly for render {
+  render(summary: empty_summary())
+    == ["Expense report", "", "No expenses to report."]
+}
+
+// The error list that follows the report: one line per problem, or nothing at all.
+pub fn render_problems(problems: List<expense.Problem>) -> List<String> {
+  if problems.length == 0 {
+    return [];
+  }
+  var lines: List<String> = [
+    "",
+    "Problems (" ++ int.to_text(value: problems.length) ++ ")",
+  ];
+  for problem in problems {
+    lines = lines ++ ["  " ++ expense.describe(problem: problem)];
+  }
+  lines
+}
+
+example render_problems_cases for render_problems {
+  render_problems(problems: []) == []
+    and render_problems(
+      problems: [
+        expense.Problem(line: 7, reason: expense.Reason.EmptyCategory),
+        expense.Problem(
+          line: 9,
+          reason: expense.Reason.BadAmount(given: "12.5x"),
+        ),
+      ],
+    )
+      == [
+        "",
+        "Problems (2)",
+        "  line 7: category is empty",
+        "  line 9: amount \"12.5x\" is not a money amount (digits with two decimals or none)",
+      ]
+}
+
+// The warnings: "  food: spent 340.50 of 300.00, over by 40.50".
+pub fn render_warnings(warnings: List<aggregate.Overspend>) -> List<String> {
+  if warnings.length == 0 {
+    return [];
+  }
+  var lines: List<String> = ["", "Budget warnings"];
+  for warning in warnings {
+    lines = lines
+      ++ [
+        "  "
+          ++ warning.category
+          ++ ": spent "
+          ++ money.format(amount: warning.spent)
+          ++ " of "
+          ++ money.format(amount: warning.limit)
+          ++ ", over by "
+          ++ money.format(amount: warning.over),
+      ];
+  }
+  lines
+}
+
+example render_warnings_cases for render_warnings {
+  render_warnings(warnings: []) == []
+    and render_warnings(
+      warnings: [
+        aggregate.Overspend(
+          category: "food",
+          spent: money.from_int(value: 34050),
+          limit: money.from_int(value: 30000),
+          over: money.from_int(value: 4050),
+        ),
+      ],
+    )
+      == [
+        "",
+        "Budget warnings",
+        "  food: spent 340.50 of 300.00, over by 40.50",
+      ]
+}
+
+// A two-expense summary written by hand, so the layout example does not depend on
+// the aggregate functions.
+fn small_summary() -> Summary {
+  Summary(
+    month: Some(value: date.Month(year: 2026, month: 10)),
+    count: 2,
+    category_count: 2,
+    by_category: [
+      aggregate.Total(name: "travel", amount: money.from_int(value: 8000)),
+      aggregate.Total(name: "food", amount: money.from_int(value: 2000)),
+    ],
+    by_month: [
+      aggregate.Total(name: "2026-10", amount: money.from_int(value: 10000)),
+    ],
+    largest: fixtures.sample_records(amounts: [8000, 2000]),
+    warnings: [],
+    total: money.from_int(value: 10000),
+  )
+}
+
+// One line per name, with names and amounts in aligned columns and, for categories, the
+// share of the grand total.
+fn totals_lines(
+  totals: List<aggregate.Total>,
+  total: money.Cents,
+  with_share: Bool,
+) -> List<String> {
+  let names = table.align_left(
+    cells: list.map(
+      items: totals,
+      apply: fn(item: aggregate.Total) -> String {
+        item.name
+      },
+    ),
+  );
+  let amounts = table.align_right(
+    cells: list.map(
+      items: totals,
+      apply: fn(item: aggregate.Total) -> String {
+        money.format(amount: item.amount)
+      },
+    ),
+  );
+  let shares = table.align_right(
+    cells: list.map(
+      items: totals,
+      apply: fn(item: aggregate.Total) -> String {
+        percent_text(amount: item.amount, total: total)
+      },
+    ),
+  );
+  var lines: List<String> = [];
+  for index in 0..totals.length {
+    let share = if with_share {
+      "  " ++ shares[index]
+    } else {
+      ""
+    };
+    lines = lines ++ ["  " ++ names[index] ++ "  " ++ amounts[index] ++ share];
+  }
+  lines
+}

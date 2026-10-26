@@ -1,0 +1,161 @@
+// Laws of the move rules, checked on thousands of random walks.
+// `moves.step` already proves its counter rules with contracts. What a contract cannot
+// say easily (which boxes moved, whether a step can be walked back) is stated here as
+// properties: each one is run against many generated lists of directions, starting from
+// the same open room. The generated walks mostly bump walls and sometimes push boxes,
+// which is exactly the mixture the laws need.
+module sokoban.laws;
+
+import sokoban.board;
+import sokoban.moves;
+import sokoban.point;
+import sokoban.samples;
+import std.list;
+
+// A board and the state reached on it; the one thing every property starts from.
+record Setup {
+  grid: board.Board,
+  state: moves.State,
+}
+
+// The sample room after playing a list of directions from its start. None only if the
+// fixture stopped parsing, which the properties treat as a failure.
+fn after(path: List<point.Direction>) -> Option<Setup> {
+  match samples.room() {
+    Some(value: puzzle) => Some(
+      value: Setup(
+        grid: puzzle.grid,
+        state: moves.walk(
+          grid: puzzle.grid,
+          state: moves.initial(puzzle: puzzle),
+          path: path,
+        ),
+      ),
+    ),
+    None => None,
+  }
+}
+
+example after_nothing_is_the_start for after {
+  match after(path: []) {
+    Some(value: setup) => setup.state.moves == 0
+      and setup.state.player == point.Point(row: 2, col: 4),
+    None => false,
+  }
+}
+
+// Law: a blocked step returns the state it was given, field for field.
+property a_blocked_step_changes_nothing for after(
+  path: List<point.Direction>,
+  direction: point.Direction,
+) {
+  match after(path: path) {
+    None => false,
+    Some(value: setup) => {
+      let next = moves.step(
+        grid: setup.grid,
+        state: setup.state,
+        direction: direction,
+      );
+      next.outcome != moves.Outcome.Blocked or next.state == setup.state
+    },
+  }
+}
+
+// Law: after a plain move (no box involved) the opposite move is always possible and
+// brings the player back to the cell they came from, with every box where it was.
+property a_move_can_be_walked_back for after(
+  path: List<point.Direction>,
+  direction: point.Direction,
+) {
+  match after(path: path) {
+    None => false,
+    Some(value: setup) => {
+      let there = moves.step(
+        grid: setup.grid,
+        state: setup.state,
+        direction: direction,
+      );
+      let back = moves.step(
+        grid: setup.grid,
+        state: there.state,
+        direction: point.opposite(direction: direction),
+      );
+      there.outcome != moves.Outcome.Moved
+        or (
+          back.outcome == moves.Outcome.Moved
+            and back.state.player == setup.state.player
+            and back.state.boxes == setup.state.boxes
+        )
+    },
+  }
+}
+
+// Law: a push shifts exactly one box, by one cell, in the direction of the step, and the
+// player ends up on the cell the box left. Any other kind of step keeps every box.
+property a_push_moves_one_box_one_cell for after(
+  path: List<point.Direction>,
+  direction: point.Direction,
+) {
+  match after(path: path) {
+    None => false,
+    Some(value: setup) => {
+      let next = moves.step(
+        grid: setup.grid,
+        state: setup.state,
+        direction: direction,
+      );
+      match next.outcome {
+        moves.Outcome.Pushed => list.count(
+          items: next.state.boxes,
+          test: fn(crate: point.Point) -> Bool {
+            not list.contains(items: setup.state.boxes, item: crate)
+          },
+        )
+          == 1
+          and next.state.player
+            == point.shift(spot: setup.state.player, direction: direction)
+          and list.contains(
+            items: next.state.boxes,
+            item: point.shift(spot: next.state.player, direction: direction),
+          ),
+        _ => next.state.boxes == setup.state.boxes,
+      }
+    },
+  }
+}
+
+// Law: a push is never free. Both counters grow by exactly what happened: one more move,
+// and one more push when a box moved.
+property counters_follow_the_outcome for after(
+  path: List<point.Direction>,
+  direction: point.Direction,
+) {
+  match after(path: path) {
+    None => false,
+    Some(value: setup) => {
+      let next = moves.step(
+        grid: setup.grid,
+        state: setup.state,
+        direction: direction,
+      );
+      match next.outcome {
+        moves.Outcome.Blocked => next.state.moves == setup.state.moves,
+        moves.Outcome.Moved => next.state.moves == setup.state.moves + 1
+          and next.state.pushes == setup.state.pushes,
+        moves.Outcome.Pushed => next.state.moves == setup.state.moves + 1
+          and next.state.pushes == setup.state.pushes + 1,
+      }
+    },
+  }
+}
+
+// Law: no walk ever creates or destroys a box.
+property the_number_of_boxes_never_changes for after(
+  path: List<point.Direction>,
+) {
+  match after(path: path) {
+    Some(value: setup) => setup.state.boxes.length == 2,
+    None => false,
+  }
+}

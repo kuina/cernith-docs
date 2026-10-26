@@ -1,0 +1,349 @@
+// The whole program as one pure function: input lines and arguments in, output lines
+// and an exit status out. `main` only moves those lines to and from the terminal, so
+// every behavior below is tested here with plain `example`s and no `uses io`.
+module expense_report.app;
+
+import expense_report.aggregate as aggregate;
+import expense_report.csv as csv;
+import expense_report.expense as expense;
+import expense_report.money as money;
+import expense_report.options as options;
+import expense_report.report as report;
+import std.list;
+
+// What a run produces. The status is 0 (ok), 1 (`--strict` and the data had problems)
+// or 2 (the arguments were wrong); the invariant makes any other number impossible.
+pub record Outcome {
+  lines: List<String>,
+  status: Int,
+} where status >= 0 and status <= 2;
+
+// The records that were valid and the problems of the lines that were not.
+record Reading {
+  records: List<expense.Expense>,
+  problems: List<expense.Problem>,
+}
+
+// The number of lines of the input that are not valid expense records.
+pub fn count_problems(lines: List<String>) -> Int {
+  read_input(lines: lines).problems.length
+}
+
+example count_problems_counts_the_bad_lines for count_problems {
+  count_problems(lines: sample_input()) == 4
+    and count_problems(lines: []) == 1
+    and count_problems(lines: [header(), "2026-10-03,food,Tea,2"]) == 0
+}
+
+// The first budget for a category that the report does not know, if any.
+fn first_unknown_budget(budgets: List<options.Budget>) -> Option<String> {
+  match list.find(
+    items: budgets,
+    test: fn(item: options.Budget) -> Bool {
+      not expense.is_known(category: item.category)
+    },
+  ) {
+    Some(value: found) => Some(value: found.category),
+    None => None,
+  }
+}
+
+example first_unknown_budget_cases for first_unknown_budget {
+  first_unknown_budget(
+    budgets: [
+      options.Budget(category: "food", limit: money.from_int(value: 0)),
+      options.Budget(category: "pets", limit: money.from_int(value: 0)),
+    ],
+  )
+    == Some(value: "pets")
+    and first_unknown_budget(budgets: []) == None
+}
+
+// The header line of the sample inputs.
+fn header() -> String {
+  "date,category,description,amount"
+}
+
+// The header comes first; its problem (if any) is the first in the list. Then every
+// data line is read; each one lands in exactly one of the two lists of the result.
+fn read_input(lines: List<String>) -> Reading {
+  ensures result.records.length + result.problems.length <= lines.length + 1;
+
+  let rows = csv.data_lines(lines: lines);
+  var records: List<expense.Expense> = [];
+  var problems: List<expense.Problem> = [];
+  match expense.check_header(lines: lines) {
+    Some(value: problem) => {
+      problems = [problem];
+    },
+    None => {},
+  }
+  for index in 0..rows.length {
+    invariant records.length + problems.length <= index + 1;
+
+    match expense.parse_row(row: rows[index]) {
+      Ok(value: parsed) => {
+        records = records ++ [parsed];
+      },
+      Err(error: problem) => {
+        problems = problems ++ [problem];
+      },
+    }
+  }
+  Reading(records: records, problems: problems)
+}
+
+// A run that stops at once because of the arguments: the message, then the help.
+fn refuse(message: String) -> Outcome {
+  Outcome(lines: ["error: " ++ message] ++ options.usage(), status: 2)
+}
+
+// A run: parse the options, read the records, print the report and then the problems.
+// Bad data does not stop the report; only bad arguments do.
+pub fn run(lines: List<String>, args: List<String>) -> Outcome {
+  match options.parse(args: args) {
+    Err(error: error) => refuse(message: options.describe(error: error)),
+    Ok(value: chosen) => match first_unknown_budget(budgets: chosen.budgets) {
+      Some(value: category) => refuse(
+        message: "--budget names the unknown category \"" ++ category ++ "\"",
+      ),
+      None => run_with(lines: lines, chosen: chosen),
+    },
+  }
+}
+
+// Bad lines are listed after the report. Exit status 0 unless `--strict` is given.
+example run_collects_every_problem for run {
+  run(lines: sample_input(), args: ["--top", "0"]).lines
+    == [
+      "Expense report",
+      "2 expenses in 2 categories",
+      "",
+      "By category",
+      "  travel  20.00  80%",
+      "  food     5.00  20%",
+      "",
+      "By month",
+      "  2026-10  25.00",
+      "",
+      "Grand total: 25.00",
+      "",
+      "Problems (4)",
+      "  line 4: amount \"12.5x\" is not a money amount (digits with two decimals or none)",
+      "  line 5: date \"2026-02-30\" has the day 30, but that month has 28 days",
+      "  line 6: unknown category \"pets\"",
+      "  line 7: record has 5 fields, expected 4 (a comma inside a field is not supported)",
+    ]
+    and run(lines: sample_input(), args: ["--top", "0"]).status == 0
+}
+
+// A refund is a negative amount; it lowers the totals. A total of 0 has no shares, so
+// the percentage column shows "-".
+example run_counts_refunds for run {
+  run(
+    lines: [
+      header(),
+      "2026-10-01,office,Chair,100.00",
+      "2026-10-02,office,Chair back,-100.00",
+    ],
+    args: ["--top", "0"],
+  ).lines
+    == [
+      "Expense report",
+      "2 expenses in 1 category",
+      "",
+      "By category",
+      "  office  0.00  -",
+      "",
+      "By month",
+      "  2026-10  0.00",
+      "",
+      "Grand total: 0.00",
+    ]
+}
+
+example run_filters_by_month_and_warns_about_budgets for run {
+  run(
+    lines: [
+      header(),
+      "2026-09-30,food,Old lunch,500.00",
+      "2026-10-03,food,Lunch,12.50",
+      "2026-10-09,food,Dinner,27.50",
+    ],
+    args: ["--month", "2026-10", "--budget", "food=30", "--top", "0"],
+  )
+    == Outcome(
+      lines: [
+        "Expense report for 2026-10",
+        "2 expenses in 1 category",
+        "",
+        "By category",
+        "  food  40.00  100%",
+        "",
+        "By month",
+        "  2026-10  40.00",
+        "",
+        "Budget warnings",
+        "  food: spent 40.00 of 30.00, over by 10.00",
+        "",
+        "Grand total: 40.00",
+      ],
+      status: 0,
+    )
+}
+
+// A normal run with no problems in the data exits 0.
+example run_prints_a_report_and_exits_0 for run {
+  run(
+    lines: [
+      header(),
+      "2026-10-03,food,Lunch,12.50",
+      "2026-10-05,travel,Train,80",
+      "2026-10-09,food,Dinner,27.50",
+    ],
+    args: ["--top", "1"],
+  )
+    == Outcome(
+      lines: [
+        "Expense report",
+        "3 expenses in 2 categories",
+        "",
+        "By category",
+        "  travel  80.00  67%",
+        "  food    40.00  33%",
+        "",
+        "By month",
+        "  2026-10  120.00",
+        "",
+        "Largest expenses",
+        "  1. 2026-10-05  Train  80.00",
+        "",
+        "Grand total: 120.00",
+      ],
+      status: 0,
+    )
+}
+
+example run_refuses_bad_arguments_with_status_2 for run {
+  run(lines: sample_input(), args: ["--verbose"])
+    == Outcome(
+      lines: ["error: unknown option \"--verbose\""] ++ options.usage(),
+      status: 2,
+    )
+    and run(lines: sample_input(), args: ["--budget", "pets=5"]).lines[0]
+      == "error: --budget names the unknown category \"pets\""
+    and run(lines: sample_input(), args: ["--month", "2026-13"]).status == 2
+}
+
+example run_reports_a_missing_header for run {
+  run(lines: [], args: [])
+    == Outcome(
+      lines: [
+        "Expense report",
+        "",
+        "No expenses to report.",
+        "",
+        "Problems (1)",
+        "  line 1: the input is empty, there is no header line",
+      ],
+      status: 0,
+    )
+}
+
+example run_with_strict_exits_1_on_problems for run {
+  run(lines: sample_input(), args: ["--strict"]).status == 1
+    and run(
+      lines: [header(), "2026-10-03,food,Tea,2"],
+      args: ["--strict"],
+    ).status
+      == 0
+}
+
+fn run_with(lines: List<String>, chosen: options.Options) -> Outcome {
+  let reading = read_input(lines: lines);
+  let shown = report.render(
+    summary: summarize(records: reading.records, chosen: chosen),
+  );
+  let failed = chosen.strict and reading.problems.length > 0;
+  Outcome(
+    lines: shown ++ report.render_problems(problems: reading.problems),
+    status: if failed {
+      1
+    } else {
+      0
+    },
+  )
+}
+
+// Seven lines: a header, two good records, and four different kinds of bad line.
+fn sample_input() -> List<String> {
+  [
+    header(),
+    "2026-10-03,food,Lunch,5",
+    "2026-10-05,travel,Train,20.00",
+    "2026-10-06,food,Coffee,12.5x",
+    "2026-02-30,food,Ghost,1",
+    "2026-10-07,pets,Food for the cat,9",
+    "2026-10-08,food,Lunch, big,9",
+  ]
+}
+
+// With `--strict` the status is 1 exactly when the input had problems.
+pub fn status_with_strict(lines: List<String>) -> Bool {
+  run(lines: lines, args: ["--strict"]).status
+    == (
+      if count_problems(lines: lines) > 0 {
+        1
+      } else {
+        0
+      }
+    )
+}
+
+example status_with_strict_follows_the_problems for status_with_strict {
+  status_with_strict(lines: sample_input())
+    and status_with_strict(lines: [header(), "2026-10-03,food,Tea,2"])
+}
+
+property strict_fails_exactly_when_there_are_problems for status_with_strict(
+  lines: List<String>,
+) {
+  status_with_strict(lines: lines)
+}
+
+// The default run (no `--strict`) never exits with a failure status, whatever the input.
+pub fn status_without_strict(lines: List<String>) -> Int {
+  run(lines: lines, args: []).status
+}
+
+example status_without_strict_is_0 for status_without_strict {
+  status_without_strict(lines: sample_input()) == 0
+}
+
+property bad_data_alone_never_fails_the_run for status_without_strict(
+  lines: List<String>,
+) {
+  status_without_strict(lines: lines) == 0
+}
+
+// Filters by month, then computes everything the report shows.
+fn summarize(
+  records: List<expense.Expense>,
+  chosen: options.Options,
+) -> report.Summary {
+  let selected = aggregate.in_month(records: records, month: chosen.month);
+  let by_category = aggregate.category_totals(records: selected);
+  report.Summary(
+    month: chosen.month,
+    count: selected.length,
+    category_count: aggregate.category_count(records: selected),
+    by_category: by_category,
+    by_month: aggregate.month_totals(records: selected),
+    largest: aggregate.largest(records: selected, count: chosen.top),
+    warnings: aggregate.overspends(
+      totals: by_category,
+      budgets: chosen.budgets,
+    ),
+    total: aggregate.grand_total(records: selected),
+  )
+}

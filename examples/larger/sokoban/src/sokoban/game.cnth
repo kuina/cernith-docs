@@ -1,0 +1,219 @@
+// One game of Sokoban: moves, undo, restart, and text commands.
+// A Game is a plain value. Every command returns a new Game, so an undo is just "go back
+// to the Game we remembered" and the whole session can be replayed in an `example`.
+// Command letters are read here (`parse_command`); whole lines of letters are played
+// by `sokoban.session`.
+module sokoban.game;
+
+import sokoban.board;
+import sokoban.history;
+import sokoban.level;
+import sokoban.moves;
+import sokoban.point;
+import sokoban.samples;
+
+// What the player can ask for with one letter.
+pub variant Command {
+  Move(direction: point.Direction),
+  Undo,
+  Restart,
+}
+
+// The state of play. `start` is kept so that `x` can restart; `trail` holds the state
+// before every move that did something, newest last.
+pub record Game {
+  grid: board.Board,
+  start: moves.State,
+  state: moves.State,
+  trail: history.History<moves.State>,
+}
+
+// Carries out one command.
+pub fn apply_command(game: Game, command: Command) -> Game {
+  match command {
+    Command.Move(direction: direction) => apply_move(
+      game: game,
+      direction: direction,
+    ),
+    Command.Undo => apply_undo(game: game),
+    Command.Restart => apply_restart(game: game),
+  }
+}
+
+example apply_command_dispatches for apply_command {
+  match sample_game() {
+    Some(value: game) => apply_command(
+      game: game,
+      command: Command.Move(direction: point.Direction.Down),
+    )
+      == apply_move(game: game, direction: point.Direction.Down)
+      and apply_command(game: game, command: Command.Undo) == game,
+    None => false,
+  }
+}
+
+// Plays a list of moves; used to reach arbitrary positions in the properties.
+fn apply_command_list(game: Game, path: List<point.Direction>) -> Game {
+  var current: Game = game;
+  for direction in path {
+    current = apply_move(game: current, direction: direction);
+  }
+  current
+}
+
+// One move. A step that is blocked changes nothing at all, so it is not remembered and
+// cannot be undone (a wall bump never fills the undo history). A step that moved or
+// pushed first remembers the state it started from.
+pub fn apply_move(game: Game, direction: point.Direction) -> Game {
+  ensures result.state.boxes.length == game.state.boxes.length;
+  ensures result.trail.past.length >= game.trail.past.length;
+  ensures result.trail.past.length <= game.trail.past.length + 1;
+
+  let taken = moves.step(
+    grid: game.grid,
+    state: game.state,
+    direction: direction,
+  );
+  match taken.outcome {
+    moves.Outcome.Blocked => game,
+    _ => Game(
+      grid: game.grid,
+      start: game.start,
+      state: taken.state,
+      trail: history.remember(history: game.trail, item: game.state),
+    ),
+  }
+}
+
+example a_move_is_remembered_and_a_bump_is_not for apply_move {
+  match sample_game() {
+    Some(value: game) => {
+      let moved = apply_move(game: game, direction: point.Direction.Up);
+      let bumped = apply_move(game: moved, direction: point.Direction.Up);
+      moved.state.moves == 1
+        and history.depth(history: moved.trail) == 1
+        and bumped == moved
+    },
+    None => false,
+  }
+}
+
+// Back to the first position. The undo history is cleared: a restart is a fresh start,
+// not a move that can be taken back.
+pub fn apply_restart(game: Game) -> Game {
+  ensures result.state == game.start;
+  ensures result.trail.past.length == 0;
+
+  Game(
+    grid: game.grid,
+    start: game.start,
+    state: game.start,
+    trail: history.empty(),
+  )
+}
+
+example restart_returns_to_the_start for apply_restart {
+  match sample_game() {
+    Some(value: game) => apply_restart(
+      game: apply_move(game: game, direction: point.Direction.Left),
+    )
+      == game,
+    None => false,
+  }
+}
+
+// Go back one remembered state; with nothing remembered the game stays as it is.
+pub fn apply_undo(game: Game) -> Game {
+  ensures result == game
+    or result.trail.past.length + 1 == game.trail.past.length;
+
+  match history.undo(history: game.trail) {
+    None => game,
+    Some(value: restored) => Game(
+      grid: game.grid,
+      start: game.start,
+      state: restored.item,
+      trail: restored.rest,
+    ),
+  }
+}
+
+example undo_goes_back_one_step for apply_undo {
+  match sample_game() {
+    Some(value: game) => apply_undo(
+      game: apply_move(game: game, direction: point.Direction.Down),
+    )
+      == game
+      and apply_undo(game: game) == game,
+    None => false,
+  }
+}
+
+// Law: any single move that changed the game is taken back exactly by one undo. This
+// includes the move and push counters, because the whole earlier state is restored.
+property undo_restores_the_game_before_any_move for apply_undo(
+  path: List<point.Direction>,
+  direction: point.Direction,
+) {
+  match sample_game() {
+    None => false,
+    Some(value: game) => {
+      let before = apply_command_list(game: game, path: path);
+      let after = apply_move(game: before, direction: direction);
+      after == before or apply_undo(game: after) == before
+    },
+  }
+}
+
+// True when every box is on a goal.
+pub fn is_solved(game: Game) -> Bool {
+  moves.is_solved(grid: game.grid, state: game.state)
+}
+
+// A new game at the start of a puzzle, with nothing to undo.
+pub fn new_game(puzzle: level.Level) -> Game {
+  ensures result.trail.past.length == 0;
+  ensures result.state == result.start;
+
+  let first = moves.initial(puzzle: puzzle);
+  Game(grid: puzzle.grid, start: first, state: first, trail: history.empty())
+}
+
+example new_game_starts_with_nothing_to_undo for new_game {
+  match sample_game() {
+    Some(value: game) => game.state.moves == 0
+      and history.depth(history: game.trail) == 0
+      and not is_solved(game: game),
+    None => false,
+  }
+}
+
+// The command a single letter stands for: u d l r move, z undoes, x restarts. Anything
+// else, including an empty or longer text, is None.
+pub fn parse_command(letter: String) -> Option<Command> {
+  match letter {
+    "z" => Some(value: Command.Undo),
+    "x" => Some(value: Command.Restart),
+    _ => match point.from_letter(text: letter) {
+      Some(value: direction) => Some(value: Command.Move(direction: direction)),
+      None => None,
+    },
+  }
+}
+
+example parse_command_knows_six_letters for parse_command {
+  parse_command(letter: "u")
+    == Some(value: Command.Move(direction: point.Direction.Up))
+    and parse_command(letter: "z") == Some(value: Command.Undo)
+    and parse_command(letter: "x") == Some(value: Command.Restart)
+    and parse_command(letter: "q") == None
+    and parse_command(letter: "U") == None
+}
+
+// The sample room as a game, or None if its text ever stopped parsing.
+fn sample_game() -> Option<Game> {
+  match samples.room() {
+    Some(value: puzzle) => Some(value: new_game(puzzle: puzzle)),
+    None => None,
+  }
+}

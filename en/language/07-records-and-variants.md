@@ -95,7 +95,7 @@ pub fn blank(width: Int, height: Int) -> Grid {
 }
 ```
 
-An invariant is a specification expression. Functions that have effects cannot be called in it ([09 Contracts](09-contracts.md)). A condition written only with comparisons of integers or floating-point numbers, `.length`, and `and`, `or`, and `not` has a simple form that the checker can readily use as an assumption.
+An invariant is a specification expression. Functions that have effects cannot be called in it ([09 Contracts](09-contracts.md)). A condition written only with comparisons of integers or floating-point numbers, `.length`, and `and`, `or`, and `not` has a simple form that the checker can readily use as an assumption. A call to a pure function of your own is accepted in the condition, but the checker cannot prove it when a record is built (warning `W0504`): the condition is then checked at run time. Prefer the simple form where it is enough.
 
 ## Variants
 

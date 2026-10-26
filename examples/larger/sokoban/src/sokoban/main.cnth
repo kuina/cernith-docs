@@ -1,0 +1,280 @@
+// Sample: Sokoban, a text-mode puzzle game in several modules
+// Shows: a package of small pure modules, validated input as a Result, immutable state with unlimited undo, records with invariants, contracts and laws that the checker proves, one thin io shell
+// Chapter: language/14-modules-and-packages.md
+// Run: cernith run examples/larger/sokoban < examples/larger/sokoban/run.stdin
+// Run-args: 1
+module sokoban.main;
+
+import sokoban.game;
+import sokoban.level;
+import sokoban.levels;
+import sokoban.session;
+import std.int;
+import std.io;
+import std.list;
+import std.result;
+import std.test;
+import std.text;
+
+// A level picked from the command line, ready to play.
+pub record Chosen {
+  number: Int,
+  title: String,
+  start: game.Game,
+}
+
+// What a whole run produces: the lines to print and the exit status.
+pub record Run {
+  lines: List<String>,
+  status: Int,
+}
+
+// Why a game could not be started. Every case is an ordinary value, so `execute` can
+// turn each one into a message and an exit status without any special handling.
+pub variant StartError {
+  NotANumber(argument: String),
+  NoSuchLevel(number: Int, count: Int),
+  BrokenLevel(number: Int, error: level.LevelError),
+}
+
+// Reads the level number from the arguments (the first one; level 1 when there is none)
+// and builds the game for it. The `?` operator returns early with the error of a
+// failed step, so the steps read top to bottom.
+pub fn choose(args: List<String>) -> Result<Chosen, StartError> {
+  let number = level_number(args: args)?;
+  let found = pick(number: number)?;
+  match level.parse(rows: found.rows) {
+    Err(error: error) => Err(
+      error: StartError.BrokenLevel(number: number, error: error),
+    ),
+    Ok(value: puzzle) => Ok(
+      value: Chosen(
+        number: number,
+        title: found.title,
+        start: game.new_game(puzzle: puzzle),
+      ),
+    ),
+  }
+}
+
+example choose_defaults_to_level_one for choose {
+  match choose(args: []) {
+    Ok(value: chosen) => chosen.number == 1 and chosen.title == "Warm-up",
+    Err(error: _) => false,
+  }
+}
+
+example choose_reports_what_went_wrong for choose {
+  choose(args: ["two"]) == Err(error: StartError.NotANumber(argument: "two"))
+    and choose(args: ["9"])
+      == Err(error: StartError.NoSuchLevel(number: 9, count: levels.count()))
+    and choose(args: ["0"])
+      == Err(error: StartError.NoSuchLevel(number: 0, count: levels.count()))
+}
+
+// A one-line message for a start error.
+pub fn describe(error: StartError) -> String {
+  match error {
+    StartError.NotANumber(argument: argument) => "sokoban: '"
+      ++ argument
+      ++ "' is not a level number",
+    StartError.NoSuchLevel(number: number, count: count) => "sokoban: no level "
+      ++ int.to_text(value: number)
+      ++ " (choose 1 to "
+      ++ int.to_text(value: count)
+      ++ ")",
+    StartError.BrokenLevel(number: number, error: problem) => "sokoban: level "
+      ++ int.to_text(value: number)
+      ++ " is broken: "
+      ++ level.describe(error: problem),
+  }
+}
+
+example describe_each_start_error for describe {
+  describe(error: StartError.NotANumber(argument: "two"))
+    == "sokoban: 'two' is not a level number"
+    and describe(error: StartError.NoSuchLevel(number: 9, count: 5))
+      == "sokoban: no level 9 (choose 1 to 5)"
+    and describe(
+      error: StartError.BrokenLevel(
+        number: 3,
+        error: level.LevelError.NoPlayer,
+      ),
+    )
+      == "sokoban: level 3 is broken: the level has no player (@ or +)"
+}
+
+// True when the last line printed is a status line that ends in SOLVED.
+fn ends_solved(run: Run) -> Bool {
+  match list.last(items: run.lines) {
+    Some(value: last) => text.ends_with(of: last, suffix: "SOLVED"),
+    None => false,
+  }
+}
+
+// The whole program without any input or output: arguments and input lines in, output
+// lines and exit status out. `main` only moves these between the world and this function,
+// which is why the end-to-end examples below need no simulated terminal at all.
+pub fn execute(args: List<String>, input: List<String>) -> Run {
+  match choose(args: args) {
+    Err(error: error) => Run(lines: [describe(error: error)], status: 2),
+    Ok(value: chosen) => Run(
+      lines: [
+        "Level " ++ int.to_text(value: chosen.number) ++ ": " ++ chosen.title,
+      ]
+        ++ session.play(game: chosen.start, input: input),
+      status: 0,
+    ),
+  }
+}
+
+example a_bad_level_number_prints_one_line_and_fails for execute {
+  execute(args: ["7"], input: ["u"])
+    == Run(lines: ["sokoban: no level 7 (choose 1 to 5)"], status: 2)
+}
+
+example a_whole_session_in_text for execute {
+  execute(args: [], input: ["uldlu", "r"])
+    == Run(
+      lines: [
+        "Level 1: Warm-up",
+        "######",
+        "#. . #",
+        "# $$ #",
+        "#  @ #",
+        "######",
+        "moves: 0, pushes: 0",
+        "",
+        "> uldlu",
+        "######",
+        "#* * #",
+        "#@   #",
+        "#    #",
+        "######",
+        "moves: 5, pushes: 3 - SOLVED",
+        "",
+        "> r",
+        "solved: ignoring the last 1 move(s) of this line",
+        "######",
+        "#* * #",
+        "#@   #",
+        "#    #",
+        "######",
+        "moves: 5, pushes: 3 - SOLVED",
+      ],
+      status: 0,
+    )
+}
+
+// End to end without any io: the stored solution of every built-in level, fed through
+// `execute` as one input line, ends with a SOLVED status line and exit status 0.
+example every_level_can_be_played_to_the_end for execute {
+  list.all(
+    items: list.range(from: 1, to: levels.count() + 1),
+    test: fn(number: Int) -> Bool {
+      match levels.entry(number: number) {
+        Some(value: found) => ends_solved(
+          run: execute(
+            args: [int.to_text(value: number)],
+            input: [found.solution],
+          ),
+        )
+          and execute(
+            args: [int.to_text(value: number)],
+            input: [found.solution],
+          ).status
+            == 0,
+        None => false,
+      }
+    },
+  )
+}
+
+// The level number given as the first argument, 1 when there is no argument.
+fn level_number(args: List<String>) -> Result<Int, StartError> {
+  if args.length == 0 {
+    Ok(value: 1)
+  } else {
+    match int.parse(text: args[0]) {
+      Some(value: number) => Ok(value: number),
+      None => Err(error: StartError.NotANumber(argument: args[0])),
+    }
+  }
+}
+
+example level_number_reads_the_first_argument for level_number {
+  level_number(args: []) == Ok(value: 1)
+    and level_number(args: ["3", "7"]) == Ok(value: 3)
+    and level_number(args: ["-2"]) == Ok(value: -2)
+    and level_number(args: ["x"])
+      == Err(error: StartError.NotANumber(argument: "x"))
+}
+
+// The only function with `uses io`: read all input lines, hand them to `execute`, print
+// what comes back. Exit status 0 after a game (solved or not), 2 for a bad argument,
+// 1 when standard input or output fails.
+pub fn main(args: List<String>) -> Int uses io {
+  match io.read_all_lines() {
+    Err(error: _) => 1,
+    Ok(value: input) => {
+      let run = execute(args: args, input: input);
+      if print_all(lines: run.lines) {
+        run.status
+      } else {
+        1
+      }
+    },
+  }
+}
+
+// `main` against a simulated terminal: the input lines are what standard input would
+// hold, and `output` is what would have been printed. `with_world` is pure, so this is an
+// ordinary example. The function it runs declares every effect the world can simulate.
+example main_prints_what_execute_returns for main {
+  test.with_world(
+    world: test.World(input: ["uldlu"], now_ms: 0, seed: 0),
+    run: fn() -> Int uses clock, io, random {
+      main(args: [])
+    },
+  )
+    == test.Outcome(value: 0, output: execute(args: [], input: ["uldlu"]).lines)
+}
+
+example main_reports_a_bad_level_number for main {
+  test.with_world(
+    world: test.World(input: [], now_ms: 0, seed: 0),
+    run: fn() -> Int uses clock, io, random {
+      main(args: ["x"])
+    },
+  )
+    == test.Outcome(value: 2, output: ["sokoban: 'x' is not a level number"])
+}
+
+// The built-in level with that number. Outside 1 to the number of levels there is none.
+fn pick(number: Int) -> Result<levels.Entry, StartError> {
+  match levels.entry(number: number) {
+    Some(value: found) => Ok(value: found),
+    None => Err(
+      error: StartError.NoSuchLevel(number: number, count: levels.count()),
+    ),
+  }
+}
+
+example pick_finds_each_level for pick {
+  result.is_ok(outcome: pick(number: 1))
+    and result.is_ok(outcome: pick(number: levels.count()))
+    and result.is_err(outcome: pick(number: 0))
+}
+
+// Prints every line; stops at the first one that cannot be written and says so.
+fn print_all(lines: List<String>) -> Bool uses io {
+  for line in lines {
+    match io.write_line(text: line) {
+      Ok(value: _) => {},
+      Err(error: _) => {
+        return false;
+      },
+    }
+  }
+  true
+}

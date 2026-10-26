@@ -1,0 +1,164 @@
+// A small CSV reader: numbered lines, comma-separated fields, and nothing else.
+//
+// Quoted fields are NOT supported. A double quote anywhere in a line is an error, and a
+// comma inside a field cannot be written, so it shows up as a wrong number of fields.
+// Keeping the format this small means every error can name its line and its reason.
+module expense_report.csv;
+
+import std.int;
+import std.list;
+import std.text;
+
+pub variant CsvError {
+  QuoteNotSupported,
+  WrongFieldCount(found: Int, expected: Int),
+}
+
+// A line of input together with its 1-based position, kept for error messages.
+pub record Line {
+  number: Int,
+  content: String,
+} where number >= 1;
+
+// The lines after the header (line 1) that are not blank, each with its own number.
+// Blank lines are skipped but still counted, so the numbers match the input file.
+pub fn data_lines(lines: List<String>) -> List<Line> {
+  ensures result.length <= lines.length;
+
+  var found: List<Line> = [];
+  for index in 0..lines.length {
+    invariant found.length <= index;
+
+    if index >= 1 and not is_blank(content: lines[index]) {
+      found = found ++ [Line(number: index + 1, content: lines[index])];
+    }
+  }
+  found
+}
+
+example data_lines_skips_header_and_blanks for data_lines {
+  data_lines(lines: ["date,amount", "a,1", "", "b,2"])
+    == [Line(number: 2, content: "a,1"), Line(number: 4, content: "b,2")]
+    and data_lines(lines: ["header only"]) == []
+    and data_lines(lines: []) == []
+}
+
+// The error text without the line number; the record module adds "line N: ".
+pub fn describe(error: CsvError) -> String {
+  match error {
+    CsvError.QuoteNotSupported => "contains a quote; quoted fields are not supported",
+    CsvError.WrongFieldCount(found: found, expected: expected) => "has "
+      ++ int.to_text(value: found)
+      ++ " fields, expected "
+      ++ int.to_text(value: expected)
+      ++ " (a comma inside a field is not supported)",
+  }
+}
+
+example describe_cases for describe {
+  describe(error: CsvError.WrongFieldCount(found: 5, expected: 4))
+    == "has 5 fields, expected 4 (a comma inside a field is not supported)"
+    and describe(error: CsvError.QuoteNotSupported)
+      == "contains a quote; quoted fields are not supported"
+}
+
+// The number of fields is the number of commas plus one.
+pub fn field_count_is_commas_plus_one(content: String) -> Bool {
+  split_fields(content: content).length
+    == text.count(of: content, part: ",") + 1
+}
+
+example field_count_is_commas_plus_one_cases for field_count_is_commas_plus_one {
+  field_count_is_commas_plus_one(content: "a,b,c")
+    and field_count_is_commas_plus_one(content: "")
+}
+
+property splitting_counts_commas for field_count_is_commas_plus_one(
+  content: String,
+) {
+  field_count_is_commas_plus_one(content: content)
+}
+
+// Splits a line into exactly `expected` fields, trimming spaces around each one. The
+// postcondition lets callers index the fields without checking the count again.
+pub fn fields(
+  content: String,
+  expected: Int,
+) -> Result<List<String>, CsvError> {
+  ensures match result {
+    Ok(value: found) => found.length == expected,
+    Err(error: _) => true,
+  };
+
+  if text.contains(of: content, part: "\"") {
+    return Err(error: CsvError.QuoteNotSupported);
+  }
+  let found = split_fields(content: content);
+  if found.length != expected {
+    return Err(
+      error: CsvError.WrongFieldCount(found: found.length, expected: expected),
+    );
+  }
+  Ok(value: found)
+}
+
+example fields_cases for fields {
+  fields(content: "a, b ,c", expected: 3) == Ok(value: ["a", "b", "c"])
+    and fields(content: "a,,c", expected: 3) == Ok(value: ["a", "", "c"])
+    and fields(content: "a,b", expected: 3)
+      == Err(error: CsvError.WrongFieldCount(found: 2, expected: 3))
+    and fields(content: "a,b,c,d", expected: 3)
+      == Err(error: CsvError.WrongFieldCount(found: 4, expected: 3))
+    and fields(content: "a,\"b,c\",d", expected: 3)
+      == Err(error: CsvError.QuoteNotSupported)
+}
+
+// A line that is empty or holds only spaces carries no record.
+pub fn is_blank(content: String) -> Bool {
+  text.is_empty(of: text.trim(of: content))
+}
+
+example is_blank_cases for is_blank {
+  is_blank(content: "")
+    and is_blank(content: "  ")
+    and not is_blank(content: " a")
+}
+
+// Every data line is numbered 2 or more, because line 1 is the header.
+pub fn numbers_follow_the_header(lines: List<String>) -> Bool {
+  list.all(
+    items: data_lines(lines: lines),
+    test: fn(item: Line) -> Bool {
+      item.number >= 2 and item.number <= lines.length
+    },
+  )
+}
+
+example numbers_follow_the_header_cases for numbers_follow_the_header {
+  numbers_follow_the_header(lines: ["h", "a", "", "b"])
+    and numbers_follow_the_header(lines: [])
+}
+
+property data_line_numbers_are_in_range for numbers_follow_the_header(
+  lines: List<String>,
+) {
+  numbers_follow_the_header(lines: lines)
+}
+
+// One field more than there are commas; an empty line has one empty field.
+pub fn split_fields(content: String) -> List<String> {
+  ensures result.length >= 1;
+
+  list.map(
+    items: text.split(of: content, separator: ","),
+    apply: fn(item: String) -> String {
+      text.trim(of: item)
+    },
+  )
+}
+
+example split_fields_cases for split_fields {
+  split_fields(content: "a,b") == ["a", "b"]
+    and split_fields(content: "") == [""]
+    and split_fields(content: ",") == ["", ""]
+}
