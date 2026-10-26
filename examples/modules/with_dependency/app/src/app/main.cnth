@@ -1,0 +1,23 @@
+// Sample: A package that depends on another package
+// Shows: [dependencies] with a path, importing a module of the dependency, main returning an exit status
+// Chapter: language/14-modules-and-packages.md
+// Run: cernith run examples/modules/with_dependency/app
+module app.main;
+
+import geometry.shapes as shapes;
+
+// The exit status of the program is the Int that main returns: 0 means success.
+// Here the program succeeds when the area (10) plus the side (4) is 14.
+pub fn main(args: List<String>) -> Int {
+  let rect = shapes.Rect(
+    width: shapes.Length(value: 2),
+    height: shapes.Length(value: 5),
+  );
+  let total = shapes.area(rect: rect)
+    + shapes.side_length(side: shapes.make_side(value: 4));
+  if total == 14 {
+    0
+  } else {
+    1
+  }
+}

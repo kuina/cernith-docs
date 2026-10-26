@@ -1,0 +1,24 @@
+// Sample: The entry module of a package
+// Shows: import with an alias, using only the public functions of another module, main as the entry point
+// Chapter: language/14-modules-and-packages.md
+// Run: cernith run examples/modules/ledger
+module ledger.main;
+
+import ledger.account as account;
+import ledger.money as money;
+import std.io;
+
+pub fn main(args: List<String>) -> Int uses io {
+  let opened = account.open(owner: "ada");
+  let funded = account.deposit(
+    account: opened,
+    amount: money.Cents(value: 1250),
+  );
+  let line = account.owner(account: funded)
+    ++ " has "
+    ++ money.format(amount: account.balance(account: funded));
+  match io.write_line(text: line) {
+    Ok(value: _) => 0,
+    Err(error: _) => 1,
+  }
+}

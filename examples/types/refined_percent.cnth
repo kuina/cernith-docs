@@ -1,0 +1,51 @@
+// Sample: Refined types
+// Shows: a type with a where condition, constructing it with a check, Percent.check returning an Option, passing it where an Int is expected
+// Chapter: language/08-refined-and-distinct-types.md
+module samples.types.refined_percent;
+
+import std.int;
+
+// A refined type is an Int that must satisfy a condition (`self` is the value).
+pub type Percent = Int where self >= 0 and self <= 100;
+
+// Percent(value: n) is a defect if n is outside 0..100. The checker tries to
+// prove the condition from what it knows, so clamp first and the proof is easy.
+pub fn clamp_to_percent(number: Int) -> Percent {
+  Percent(value: int.clamp(value: number, low: 0, high: 100))
+}
+
+example clamping_to_percent for clamp_to_percent {
+  clamp_to_percent(number: 150) == 100
+    and clamp_to_percent(number: -3) == 0
+    and clamp_to_percent(number: 42) == 42
+}
+
+// A Percent can be used wherever an Int is expected, so no unwrapping is needed.
+// The parameter type documents (and enforces) the range for every caller.
+pub fn discounted_price(price: Int, discount: Percent) -> Int {
+  requires price >= 0;
+
+  price - int.div_floor(dividend: price * discount, divisor: 100)
+}
+
+example discount_of_twenty_five_percent for discounted_price {
+  discounted_price(price: 200, discount: Percent(value: 25)) == 150
+    and discounted_price(price: 200, discount: Percent(value: 0)) == 200
+}
+
+// Input from outside is not trusted: Percent.check returns None instead of a defect.
+pub fn parse_percent(text: String) -> Option<Percent> {
+  match int.parse(text: text) {
+    Some(value: number) => Percent.check(value: number),
+    None => None,
+  }
+}
+
+example parsing_percent for parse_percent {
+  parse_percent(text: "80") == Some(value: Percent(value: 80))
+    and parse_percent(text: "101") == None
+    and parse_percent(text: "abc") == None
+}
+
+// Percent(value: n) with an n that can be out of range is refuted by `check --verify`
+// (see mistakes/unproved_restriction.cnth); clamp or check first, as in clamp_to_percent and parse_percent.

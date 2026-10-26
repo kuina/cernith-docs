@@ -1,0 +1,11 @@
+// Expected: E0401
+// Mistake: Printing without declaring the io effect.
+// Fix: Add `uses io` to the function, and to every caller up to main.
+module samples.mistakes.undeclared_effect;
+
+import std.io;
+
+pub fn greet() -> Int {
+  discard io.write_line(text: "hello");
+  0
+}

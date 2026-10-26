@@ -1,0 +1,104 @@
+// Sample: Tasks and scopes
+// Shows: the async effect, await, async.scope and async.spawn, sleep on a virtual clock, race, with_timeout
+// Chapter: language/18-concurrency.md
+module samples.concurrency.tasks_and_scopes;
+
+import std.async;
+
+// A function that may wait says `uses async`; every call to it is written with `await`.
+// sleep does not take real time: the scheduler's clock jumps to the next wake-up time,
+// so tests with waiting are fast and always give the same result.
+fn download(size: Int) -> Int uses async {
+  await async.sleep(ms: size);
+  size * 10
+}
+
+// with_timeout cancels the task if it takes longer than the limit on the virtual clock.
+pub fn download_within(size: Int, limit_ms: Int) -> Option<Int> {
+  requires limit_ms > 0;
+
+  async.block_on(
+    run: fn() -> Option<Int> uses async {
+      await async.scope(
+        body: fn(tasks: async.Scope) -> Option<Int> uses async {
+          let outcome = await async.with_timeout(
+            tasks: tasks,
+            ms: limit_ms,
+            run: fn() -> Int uses async {
+              await download(size: size)
+            },
+          );
+          match outcome {
+            Ok(value: bytes) => Some(value: bytes),
+            Err(error: _) => None,
+          }
+        },
+      )
+    },
+  )
+}
+
+example slow_downloads_time_out for download_within {
+  download_within(size: 5, limit_ms: 100) == Some(value: 50)
+    and download_within(size: 500, limit_ms: 100) == None
+}
+
+// race returns the value of the first task to finish and cancels the others.
+pub fn fastest_size(sizes: List<Int>) -> Option<Int> {
+  async.block_on(
+    run: fn() -> Option<Int> uses async {
+      await async.scope(
+        body: fn(tasks: async.Scope) -> Option<Int> uses async {
+          var runners: List<async.Task<Int>> = [];
+          for size in sizes {
+            runners = runners
+              ++ [
+                async.spawn(
+                  tasks: tasks,
+                  run: fn() -> Int uses async {
+                    await download(size: size)
+                  },
+                ),
+              ];
+          }
+          await async.race(tasks: tasks, candidates: runners)
+        },
+      )
+    },
+  )
+}
+
+example the_smallest_download_wins for fastest_size {
+  fastest_size(sizes: [40, 7, 25]) == Some(value: 70)
+    and fastest_size(sizes: []) == None
+}
+
+// Both tasks run in the scope. The scope ends only after every task of it has ended,
+// and every task must be awaited exactly once (E1201 / E1204 otherwise).
+pub fn fetch_both(first_size: Int, second_size: Int) -> Int {
+  async.block_on(
+    run: fn() -> Int uses async {
+      await async.scope(
+        body: fn(tasks: async.Scope) -> Int uses async {
+          let first = async.spawn(
+            tasks: tasks,
+            run: fn() -> Int uses async {
+              await download(size: first_size)
+            },
+          );
+          let second = async.spawn(
+            tasks: tasks,
+            run: fn() -> Int uses async {
+              await download(size: second_size)
+            },
+          );
+          await first + await second
+        },
+      )
+    },
+  )
+}
+
+example fetch_both_adds_the_results for fetch_both {
+  fetch_both(first_size: 3, second_size: 5) == 80
+}

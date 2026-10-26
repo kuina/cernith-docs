@@ -1,0 +1,80 @@
+// Sample: Variants and exhaustive match
+// Shows: variant cases with and without fields, match that must cover every case, nested patterns
+// Chapter: language/07-records-and-variants.md
+module samples.data.variants_shapes;
+
+// A variant with only plain cases is an enumeration.
+pub variant Direction {
+  North,
+  East,
+  South,
+  West,
+}
+
+pub variant Shape {
+  Dot,
+  Circle(radius: Int),
+  Rectangle(width: Int, height: Int),
+}
+
+// Cases are written Type.Case. If a new case is added to Shape later, every
+// `match` on a Shape stops compiling (E0305) until it handles the new case.
+pub fn area(shape: Shape) -> Int {
+  match shape {
+    Shape.Dot => 0,
+    Shape.Circle(radius: radius) => 3 * radius * radius,
+    Shape.Rectangle(width: width, height: height) => width * height,
+  }
+}
+
+example areas for area {
+  area(shape: Shape.Dot) == 0
+    and area(shape: Shape.Circle(radius: 2)) == 12
+    and area(shape: Shape.Rectangle(width: 3, height: 4)) == 12
+}
+
+// Patterns nest: here a variant inside an Option.
+pub fn describe(maybe_shape: Option<Shape>) -> String {
+  match maybe_shape {
+    None => "nothing",
+    Some(value: Shape.Dot) => "a dot",
+    Some(value: _) => "a shape with size",
+  }
+}
+
+example describe_options for describe {
+  describe(maybe_shape: None) == "nothing"
+    and describe(maybe_shape: Some(value: Shape.Dot)) == "a dot"
+    and describe(maybe_shape: Some(value: Shape.Circle(radius: 1)))
+      == "a shape with size"
+}
+
+// Use `_` for the cases you do not care about.
+pub fn is_round(shape: Shape) -> Bool {
+  match shape {
+    Shape.Circle(radius: _) => true,
+    _ => false,
+  }
+}
+
+example round_shapes for is_round {
+  is_round(shape: Shape.Circle(radius: 1)) and not is_round(shape: Shape.Dot)
+}
+
+pub fn turn_right(direction: Direction) -> Direction {
+  match direction {
+    Direction.North => Direction.East,
+    Direction.East => Direction.South,
+    Direction.South => Direction.West,
+    Direction.West => Direction.North,
+  }
+}
+
+example four_turns_come_back for turn_right {
+  turn_right(
+    direction: turn_right(
+      direction: turn_right(direction: turn_right(direction: Direction.North)),
+    ),
+  )
+    == Direction.North
+}

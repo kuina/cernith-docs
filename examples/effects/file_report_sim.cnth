@@ -1,0 +1,109 @@
+// Sample: File access through capabilities, tested in a simulated world
+// Shows: a manifest of capabilities, fs.read_text and fs.write_text, sim.with_sim with prepared files, checking what was written
+// Chapter: language/17-resources-and-capabilities.md
+module samples.effects.file_report_sim;
+
+import std.console;
+import std.fs;
+import std.int;
+import std.list;
+import std.result;
+import std.sim;
+import std.text;
+
+// A program cannot open files or print by itself: it receives capabilities. The manifest
+// says which ones it wants and how far they reach: files only below "data", and the console.
+pub manifest Caps {
+  console: console.Console,
+  files: fs.Fs(root: "data"),
+}
+
+// sim.with_sim builds a world with the files you list, runs the function in it, and returns
+// everything that happened: the value, the printed lines, and the files afterwards.
+fn simulate<T>(
+  setup: List<String>,
+  body: fn(caps: Caps) -> T uses io,
+) -> sim.SimOutcome<T> {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: setup,
+    run: fn() -> T uses clock, io, random {
+      body(caps: Caps(console: console.simulated(), files: fs.simulated()))
+    },
+  )
+}
+
+// Reading needs only a read-only view of the folder, which fs.read_only makes from Fs:
+// a capability can be narrowed but never widened.
+// Reads data/notes.txt, counts its lines and words, and writes data/summary.txt.
+// Every step that can fail returns a Result; `?` passes the first failure on, with
+// the error turned into text by describe.
+pub fn summarize(caps: Caps) -> Result<Int, String> uses io {
+  let notes = result.map_error(
+    outcome: fs.read_text(
+      access: fs.read_only(access: caps.files),
+      path: "notes.txt",
+    ),
+    apply: fn(error: fs.FsError) -> String {
+      fs.describe(error: error)
+    },
+  )?;
+  let lines = fs.lines_of(text: notes);
+  var words: Int = 0;
+  for line in lines {
+    words = words
+      + list.count(
+        items: text.split(of: line, separator: " "),
+        test: fn(item: String) -> Bool {
+          not text.is_empty(of: item)
+        },
+      );
+  }
+  let summary = int.to_text(value: lines.length)
+    ++ " lines, "
+    ++ int.to_text(value: words)
+    ++ " words";
+  result.map_error(
+    outcome: fs.write_text(
+      access: caps.files,
+      path: "summary.txt",
+      text: summary,
+    ),
+    apply: fn(error: fs.FsError) -> String {
+      fs.describe(error: error)
+    },
+  )?;
+  result.map_error(
+    outcome: console.write_line(access: caps.console, text: summary),
+    apply: fn(error: console.ConsoleError) -> String {
+      console.describe(error: error)
+    },
+  )?;
+  Ok(value: words)
+}
+
+example summarize_counts_and_writes_the_summary for summarize {
+  match simulate(
+    setup: [sim.file(path: "notes.txt", content: "one two\nthree\n")],
+    body: fn(caps: Caps) -> Result<Int, String> uses io {
+      summarize(caps: caps)
+    },
+  ) {
+    outcome => outcome.value == Ok(value: 3)
+      and sim.file_content(outcome: outcome, path: "summary.txt")
+        == Some(value: "2 lines, 3 words")
+      and outcome.output == ["2 lines, 3 words"],
+  }
+}
+
+example summarize_reports_a_missing_file for summarize {
+  match simulate(
+    setup: [],
+    body: fn(caps: Caps) -> Result<Int, String> uses io {
+      summarize(caps: caps)
+    },
+  ) {
+    outcome => outcome.value == Err(error: "notes.txt: not found")
+      and sim.file_paths(outcome: outcome) == [],
+  }
+}

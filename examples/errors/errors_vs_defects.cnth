@@ -1,0 +1,57 @@
+// Sample: Errors versus defects
+// Shows: a Result for failures the caller should handle, requires for mistakes of the caller, defects(of: ...) in tests
+// Chapter: language/12-errors-and-defects.md
+module samples.errors.errors_vs_defects;
+
+import std.int;
+
+pub variant DivisionError {
+  DivideByZero,
+}
+
+// A broken promise of the caller is a DEFECT: the program stops and cannot catch it.
+// `requires` says whose fault it is, and the checker rejects callers that cannot show
+// the condition (see mistakes/unproved_precondition.cnth).
+pub fn first_of(items: List<Int>) -> Int {
+  requires items.length > 0;
+
+  items[0]
+}
+
+example first_of_reads_the_head for first_of {
+  first_of(items: [7, 8]) == 7
+}
+
+// Tests can check that a call is a defect. This is for tests only: a program cannot
+// observe or recover from its own defects.
+pub fn first_or_zero(items: List<Int>) -> Int {
+  if items.length > 0 {
+    first_of(items: items)
+  } else {
+    0
+  }
+}
+
+example first_or_zero_never_stops for first_or_zero {
+  first_or_zero(items: []) == 0 and not defects(of: first_or_zero(items: []))
+}
+
+example indexing_out_of_range_is_a_defect for first_or_zero {
+  defects(of: [1, 2][5]) and not defects(of: [1, 2][1])
+}
+
+// Bad input that can really happen is an ERROR: it appears in the return type and the
+// caller decides what to do. The function checks the input itself.
+pub fn safe_ratio(total: Int, parts: Int) -> Result<Int, DivisionError> {
+  if parts == 0 {
+    Err(error: DivisionError.DivideByZero)
+  } else {
+    Ok(value: int.div_floor(dividend: total, divisor: parts))
+  }
+}
+
+example ratio_reports_zero_parts for safe_ratio {
+  safe_ratio(total: 10, parts: 3) == Ok(value: 3)
+    and safe_ratio(total: 10, parts: 0)
+      == Err(error: DivisionError.DivideByZero)
+}

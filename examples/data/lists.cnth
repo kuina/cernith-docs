@@ -1,0 +1,96 @@
+// Sample: Lists
+// Shows: list literals, indexing and length, std.list functions (map, filter, fold, sort, zip), for loops with an invariant
+// Chapter: stdlib/list.md
+module samples.data.lists;
+
+import std.int;
+import std.list;
+
+// An indexed loop. `numbers[index]` is checked against the length by the verifier;
+// the invariant tells it what is true at the top of every pass.
+pub fn count_above(numbers: List<Int>, limit: Int) -> Int {
+  ensures result >= 0 and result <= numbers.length;
+
+  var count: Int = 0;
+  for index in 0..numbers.length {
+    invariant count >= 0 and count <= index;
+
+    if numbers[index] > limit {
+      count = count + 1;
+    }
+  }
+  count
+}
+
+example count_above_limit for count_above {
+  count_above(numbers: [1, 5, 7, 2, 9], limit: 4) == 3
+    and count_above(numbers: [], limit: 0) == 0
+}
+
+// zip pairs two lists up (the shorter one decides the length); a pair has `first` and `second`.
+pub fn describe_scores(names: List<String>, scores: List<Int>) -> List<String> {
+  list.map(
+    items: list.zip(first: names, second: scores),
+    apply: fn(item: list.Pair<String, Int>) -> String {
+      item.first ++ "=" ++ int.to_text(value: item.second)
+    },
+  )
+}
+
+example scores_are_paired for describe_scores {
+  describe_scores(names: ["ann", "bob", "cy"], scores: [3, 5])
+    == ["ann=3", "bob=5"]
+}
+
+pub fn evens(numbers: List<Int>) -> List<Int> {
+  list.filter(
+    items: numbers,
+    keep: fn(item: Int) -> Bool {
+      int.rem_euclid(dividend: item, divisor: 2) == 0
+    },
+  )
+}
+
+example evens_keep_order for evens {
+  evens(numbers: [5, 2, 8, 3, 4]) == [2, 8, 4] and evens(numbers: [1, 3]) == []
+}
+
+// Lists are values: sort returns a new list and leaves its argument alone.
+pub fn highest_first(numbers: List<Int>) -> List<Int> {
+  list.reverse(items: list.sort(items: numbers))
+}
+
+example sorted_from_the_top for highest_first {
+  highest_first(numbers: [3, 1, 2]) == [3, 2, 1]
+}
+
+// Taking the largest element of a list that may be empty returns an Option.
+pub fn largest(numbers: List<Int>) -> Option<Int> {
+  list.max(items: numbers)
+}
+
+example largest_of_some_and_none for largest {
+  largest(numbers: [3, 9, 4]) == Some(value: 9) and largest(numbers: []) == None
+}
+
+// Functions are passed as values. The function given to list.map is called through
+// the label `item`; list.fold calls its function with `total` and `item`.
+pub fn sum_of_squares(numbers: List<Int>) -> Int {
+  list.fold(
+    items: list.map(
+      items: numbers,
+      apply: fn(item: Int) -> Int {
+        item * item
+      },
+    ),
+    initial: 0,
+    combine: fn(total: Int, item: Int) -> Int {
+      total + item
+    },
+  )
+}
+
+example squares_of_one_to_four for sum_of_squares {
+  sum_of_squares(numbers: [1, 2, 3, 4]) == 30
+    and sum_of_squares(numbers: []) == 0
+}

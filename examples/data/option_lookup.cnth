@@ -1,0 +1,60 @@
+// Sample: Option instead of null
+// Shows: Option<T>, looking up a key in a Map, unwrap_or, option.map, handling None with match
+// Chapter: stdlib/option.md
+module samples.data.option_lookup;
+
+import std.int;
+import std.map;
+import std.option;
+
+// Option 3: match, when the two cases need different code.
+pub fn describe_price(item: String) -> String {
+  match price_of(item: item) {
+    Some(value: price) => item ++ " costs " ++ int.to_text(value: price),
+    None => item ++ " is not sold",
+  }
+}
+
+example description_of_both_cases for describe_price {
+  describe_price(item: "tea") == "tea costs 300"
+    and describe_price(item: "juice") == "juice is not sold"
+}
+
+// A Map is a value too: map.insert returns a new map. Keys need an ordering.
+pub fn price_list() -> map.Map<String, Int> {
+  let with_tea = map.insert(map: map.empty(), key: "tea", value: 300);
+  map.insert(map: with_tea, key: "coffee", value: 450)
+}
+
+// There is no null. A lookup that can fail says so in its type: Option<Int>.
+pub fn price_of(item: String) -> Option<Int> {
+  map.get(map: price_list(), key: item)
+}
+
+example known_and_unknown_items for price_of {
+  price_of(item: "tea") == Some(value: 300) and price_of(item: "juice") == None
+}
+
+// Option 1: give a default for the missing case.
+pub fn price_or_zero(item: String) -> Int {
+  option.unwrap_or(option: price_of(item: item), default: 0)
+}
+
+example default_for_unknown_item for price_or_zero {
+  price_or_zero(item: "coffee") == 450 and price_or_zero(item: "juice") == 0
+}
+
+// Option 2: transform the value if there is one; None stays None.
+pub fn price_with_tax(item: String) -> Option<Int> {
+  option.map(
+    option: price_of(item: item),
+    apply: fn(value: Int) -> Int {
+      value + int.div_floor(dividend: value, divisor: 10)
+    },
+  )
+}
+
+example tax_is_added_when_priced for price_with_tax {
+  price_with_tax(item: "tea") == Some(value: 330)
+    and price_with_tax(item: "juice") == None
+}

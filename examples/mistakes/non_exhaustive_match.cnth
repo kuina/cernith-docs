@@ -1,0 +1,17 @@
+// Expected: E0305
+// Mistake: A match that does not cover every case of the variant.
+// Fix: Add the missing case, or a final `_` arm if one result fits all remaining cases.
+module samples.mistakes.non_exhaustive_match;
+
+pub variant Light {
+  Green,
+  Red,
+  Yellow,
+}
+
+pub fn can_go(light: Light) -> Bool {
+  match light {
+    Light.Green => true,
+    Light.Red => false,
+  }
+}

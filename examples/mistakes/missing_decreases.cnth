@@ -1,0 +1,14 @@
+// Expected: E0601
+// Mistake: A while loop with no reason to stop.
+// Fix: Add `decreases` with a non-negative Int that gets smaller on every pass.
+module samples.mistakes.missing_decreases;
+
+pub fn count_down(start: Int) -> Int {
+  requires start >= 0;
+
+  var n: Int = start;
+  while n > 0 {
+    n = n - 1;
+  }
+  n
+}

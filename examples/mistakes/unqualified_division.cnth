@@ -1,0 +1,8 @@
+// Expected: E0307
+// Mistake: Plain `/` on Int: the rounding rule is not named.
+// Fix: Write int.div_floor, int.div_trunc, or int.div_euclid with dividend: and divisor:.
+module samples.mistakes.unqualified_division;
+
+pub fn half(value: Int) -> Int {
+  value / 2
+}

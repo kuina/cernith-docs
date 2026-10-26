@@ -1,0 +1,76 @@
+// Sample: Counting with a Map and de-duplicating with a Set
+// Shows: map.insert and map.get in a loop, option.unwrap_or for a default, map.entries in key order, set.from_list and set.to_list
+// Chapter: stdlib/map.md
+module samples.data.word_count_map_set;
+
+import std.int;
+import std.list;
+import std.map;
+import std.option;
+import std.set;
+import std.text;
+
+pub fn count_lines(words: List<String>) -> List<String> {
+  list.map(
+    items: map.entries(map: count_words(words: words)),
+    apply: fn(item: map.Entry<String, Int>) -> String {
+      item.key ++ "=" ++ int.to_text(value: item.value)
+    },
+  )
+}
+
+example counts_come_out_in_key_order for count_lines {
+  count_lines(words: ["pear", "apple", "pear", "fig", "pear"])
+    == ["apple=1", "fig=1", "pear=3"]
+}
+
+// A Map is a value: every insert returns a new map, so the loop reassigns a `var`.
+// Keys must have an ordering, and the entries come out sorted by key.
+pub fn count_words(words: List<String>) -> map.Map<String, Int> {
+  var counts: map.Map<String, Int> = map.empty();
+  for word in words {
+    let seen = option.unwrap_or(
+      option: map.get(map: counts, key: word),
+      default: 0,
+    );
+    counts = map.insert(map: counts, key: word, value: seen + 1);
+  }
+  counts
+}
+
+// A Set keeps each member once, in sorted order.
+pub fn distinct_words(words: List<String>) -> List<String> {
+  set.to_list(set: set.from_list(items: words))
+}
+
+example duplicates_disappear for distinct_words {
+  distinct_words(words: ["b", "a", "b", "c", "a"]) == ["a", "b", "c"]
+}
+
+// Set operations return new sets.
+pub fn shared_words(first: List<String>, second: List<String>) -> List<String> {
+  set.to_list(
+    set: set.intersection(
+      first: set.from_list(items: first),
+      second: set.from_list(items: second),
+    ),
+  )
+}
+
+example words_in_both_lists for shared_words {
+  shared_words(first: ["a", "b", "c"], second: ["c", "a", "z"]) == ["a", "c"]
+}
+
+// Words of a sentence: split on spaces and drop the empty pieces.
+pub fn words_of(sentence: String) -> List<String> {
+  list.filter(
+    items: text.split(of: sentence, separator: " "),
+    keep: fn(item: String) -> Bool {
+      not text.is_empty(of: item)
+    },
+  )
+}
+
+example words_of_ignores_extra_spaces for words_of {
+  words_of(sentence: " the  cat ") == ["the", "cat"]
+}

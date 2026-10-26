@@ -1,0 +1,12 @@
+// Expected: E0304
+// Mistake: A call without labels.
+// Fix: Write the label of every argument: area(width: 3, height: 4).
+module samples.mistakes.positional_arguments;
+
+pub fn area(width: Int, height: Int) -> Int {
+  width * height
+}
+
+pub fn room() -> Int {
+  area(3, 4)
+}

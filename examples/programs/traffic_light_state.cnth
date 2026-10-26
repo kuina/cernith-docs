@@ -1,0 +1,88 @@
+// Sample: A state machine
+// Shows: states and events as variants, a total transition function checked by exhaustive match, a fold over events
+// Chapter: language/07-records-and-variants.md
+module samples.programs.traffic_light_state;
+
+import std.list;
+
+pub variant Event {
+  Emergency,
+  Tick,
+}
+
+pub variant Light {
+  Green,
+  Red,
+  Yellow,
+}
+
+// Replaying a list of events is a fold over the transition function.
+pub fn run(start: Light, events: List<Event>) -> Light {
+  list.fold(
+    items: events,
+    initial: start,
+    combine: fn(total: Light, item: Event) -> Light {
+      step(light: total, event: item)
+    },
+  )
+}
+
+example run_replays_the_events for run {
+  run(start: Light.Red, events: [Event.Tick, Event.Tick, Event.Tick])
+    == Light.Red
+    and run(start: Light.Red, events: [Event.Tick, Event.Emergency])
+      == Light.Red
+    and run(start: Light.Green, events: []) == Light.Green
+}
+
+// How long each light stays on, in seconds. A different total function over the same states.
+pub fn seconds_on(light: Light) -> Int {
+  match light {
+    Light.Green => 30,
+    Light.Red => 40,
+    Light.Yellow => 5,
+  }
+}
+
+example one_cycle_takes_75_seconds for seconds_on {
+  seconds_on(light: Light.Green)
+    + seconds_on(light: Light.Yellow)
+    + seconds_on(light: Light.Red)
+    == 75
+}
+
+// Every (state, event) pair is handled; adding a state or an event later makes this
+// function stop compiling until the new case is decided (E0305).
+pub fn step(light: Light, event: Event) -> Light {
+  match event {
+    Event.Emergency => Light.Red,
+    Event.Tick => match light {
+      Light.Green => Light.Yellow,
+      Light.Red => Light.Green,
+      Light.Yellow => Light.Red,
+    },
+  }
+}
+
+example an_emergency_always_stops_traffic for step {
+  step(light: Light.Green, event: Event.Emergency) == Light.Red
+    and step(light: Light.Yellow, event: Event.Emergency) == Light.Red
+    and step(light: Light.Red, event: Event.Emergency) == Light.Red
+}
+
+example ticks_go_around_the_cycle for step {
+  step(light: Light.Red, event: Event.Tick) == Light.Green
+    and step(light: Light.Green, event: Event.Tick) == Light.Yellow
+    and step(light: Light.Yellow, event: Event.Tick) == Light.Red
+}
+
+// A law of the whole machine: three ticks always return to where we started.
+pub fn three_ticks(start: Light) -> Light {
+  run(start: start, events: [Event.Tick, Event.Tick, Event.Tick])
+}
+
+example three_ticks_from_each_state for three_ticks {
+  three_ticks(start: Light.Green) == Light.Green
+    and three_ticks(start: Light.Yellow) == Light.Yellow
+    and three_ticks(start: Light.Red) == Light.Red
+}

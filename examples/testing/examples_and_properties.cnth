@@ -1,0 +1,59 @@
+// Sample: Examples and properties
+// Shows: example (one concrete case), property (a law for generated inputs), typical / empty / boundary / error cases
+// Chapter: language/16-testing.md
+module samples.testing.examples_and_properties;
+
+import std.int;
+import std.list;
+
+// Moves the first `count` elements to the end: rotate_left([1, 2, 3, 4], 1) is [2, 3, 4, 1].
+pub fn rotate_left(items: List<Int>, count: Int) -> List<Int> {
+  requires count >= 0;
+  ensures result.length == items.length;
+
+  if items.length == 0 {
+    items
+  } else {
+    let shift = int.rem_euclid(dividend: count, divisor: items.length);
+    list.slice(items: items, from: shift, to: items.length)
+      ++ list.slice(items: items, from: 0, to: shift)
+  }
+}
+
+// An example is one concrete fact written as a Bool expression. Write one for the
+// typical case, the empty case, a boundary, and every error case.
+example rotate_a_typical_list for rotate_left {
+  rotate_left(items: [1, 2, 3, 4], count: 1) == [2, 3, 4, 1]
+}
+
+example rotate_an_empty_list for rotate_left {
+  rotate_left(items: [], count: 5) == []
+}
+
+example rotate_by_zero_and_by_the_length for rotate_left {
+  rotate_left(items: [1, 2, 3], count: 0) == [1, 2, 3]
+    and rotate_left(items: [1, 2, 3], count: 3) == [1, 2, 3]
+    and rotate_left(items: [1, 2, 3], count: 4) == [2, 3, 1]
+}
+
+property rotating_by_the_length_changes_nothing for rotate_left(
+  items: List<Int>,
+  count: Int,
+) {
+  requires count >= 0;
+
+  rotate_left(items: items, count: count * items.length) == items
+}
+
+// A property is a law that must hold for every input. The test runner generates 100
+// inputs (changed with --cases) and reports a smallest counterexample if it finds one.
+// `requires` narrows the inputs; the narrowing should keep most of them.
+property rotating_keeps_the_elements for rotate_left(
+  items: List<Int>,
+  count: Int,
+) {
+  requires count >= 0;
+
+  let rotated = rotate_left(items: items, count: count);
+  list.sort(items: rotated) == list.sort(items: items)
+}

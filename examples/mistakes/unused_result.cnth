@@ -1,0 +1,13 @@
+// Expected: E0306
+// Mistake: A call whose result is thrown away silently.
+// Fix: Use the value, or write `discard f(...);` to show that dropping it is intended.
+module samples.mistakes.unused_result;
+
+pub fn forgetful() -> Int {
+  next(value: 1);
+  0
+}
+
+pub fn next(value: Int) -> Int {
+  value + 1
+}

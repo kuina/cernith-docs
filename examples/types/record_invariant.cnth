@@ -1,0 +1,50 @@
+// Sample: A record with an invariant
+// Shows: a where condition on a record, constructors that the checker proves, Option for input that may break the invariant
+// Chapter: language/07-records-and-variants.md
+module samples.types.record_invariant;
+
+// The `where` condition names the fields. Every construction of a Span, and every
+// Span.with, must satisfy it, so no function ever sees a span that ends before it starts.
+pub record Span {
+  start: Int,
+  end: Int,
+} where start <= end;
+
+// The requires clause lets the checker prove the new Span is still valid.
+pub fn extend(span: Span, by: Int) -> Span {
+  requires by >= 0;
+
+  Span.with(base: span, end: span.end + by)
+}
+
+example extend_moves_the_end for extend {
+  extend(span: Span(start: 1, end: 2), by: 3) == Span(start: 1, end: 5)
+}
+
+// The invariant gives free facts: this length can never be negative.
+pub fn length(span: Span) -> Int {
+  ensures result >= 0;
+
+  span.end - span.start
+}
+
+example length_of_span for length {
+  length(span: Span(start: 3, end: 10)) == 7
+}
+
+// From untrusted numbers: check first and return an Option.
+pub fn make_span(start: Int, end: Int) -> Option<Span> {
+  if start <= end {
+    Some(value: Span(start: start, end: end))
+  } else {
+    None
+  }
+}
+
+example make_span_checks_order for make_span {
+  make_span(start: 2, end: 5) == Some(value: Span(start: 2, end: 5))
+    and make_span(start: 5, end: 2) == None
+}
+
+// A Span whose start is after its end is never built: `Span(start: 5, end: 1)` would be
+// refuted by `check --verify` (see mistakes/broken_invariant.cnth).

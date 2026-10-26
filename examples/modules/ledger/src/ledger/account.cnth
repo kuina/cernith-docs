@@ -1,0 +1,100 @@
+// Sample: An abstract type
+// Shows: a distinct type over a private record, so other modules can only use the public functions
+// Chapter: language/14-modules-and-packages.md
+module ledger.account;
+
+import ledger.money as money;
+
+// A `pub distinct` type is abstract. Outside this module nobody can write
+// `account.Account(value: ...)` or read `.value` (E0215): the only way to make or
+// change an Account is through the functions below.
+pub type Account = distinct AccountData;
+
+// Not `pub`: invisible outside this module.
+record AccountData {
+  owner: String,
+  balance: money.Cents,
+}
+
+pub variant WithdrawError {
+  InsufficientFunds(missing: money.Cents),
+}
+
+// An example is a single Bool expression, so shared set-up goes into a helper function.
+fn account_with_one_hundred() -> Account {
+  deposit(account: open(owner: "ada"), amount: money.Cents(value: 100))
+}
+
+pub fn balance(account: Account) -> money.Cents {
+  account.value.balance
+}
+
+pub fn deposit(account: Account, amount: money.Cents) -> Account {
+  Account(
+    value: AccountData(
+      owner: account.value.owner,
+      balance: money.Cents(value: account.value.balance + amount),
+    ),
+  )
+}
+
+example deposit_adds_to_the_balance for deposit {
+  balance(
+    account: deposit(
+      account: open(owner: "ada"),
+      amount: money.Cents(value: 250),
+    ),
+  )
+    == 250
+}
+
+pub fn open(owner: String) -> Account {
+  Account(value: AccountData(owner: owner, balance: money.Cents(value: 0)))
+}
+
+example a_new_account_is_empty for open {
+  balance(account: open(owner: "ada")) == 0
+}
+
+pub fn owner(account: Account) -> String {
+  account.value.owner
+}
+
+pub fn withdraw(
+  account: Account,
+  amount: money.Cents,
+) -> Result<Account, WithdrawError> {
+  if amount > account.value.balance {
+    Err(
+      error: WithdrawError.InsufficientFunds(
+        missing: money.Cents(value: amount - account.value.balance),
+      ),
+    )
+  } else {
+    Ok(
+      value: Account(
+        value: AccountData(
+          owner: account.value.owner,
+          balance: money.Cents(value: account.value.balance - amount),
+        ),
+      ),
+    )
+  }
+}
+
+example withdraw_refuses_to_overdraw for withdraw {
+  withdraw(account: account_with_one_hundred(), amount: money.Cents(value: 140))
+    == Err(
+      error: WithdrawError.InsufficientFunds(missing: money.Cents(value: 40)),
+    )
+}
+
+example withdraw_takes_money_out for withdraw {
+  match withdraw(
+    account: account_with_one_hundred(),
+    amount: money.Cents(value: 40),
+  ) {
+    Ok(value: left) => balance(account: left) == 60,
+    Err(error: _) => false,
+  }
+}

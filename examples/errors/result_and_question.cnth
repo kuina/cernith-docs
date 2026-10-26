@@ -1,0 +1,73 @@
+// Sample: Result and the ? operator
+// Shows: a function that can fail returns Result, `?` passes an error on, errors are values you can test
+// Chapter: language/12-errors-and-defects.md
+module samples.errors.result_and_question;
+
+import std.int;
+import std.text;
+
+pub record Setting {
+  key: String,
+  value: Int,
+}
+
+// An error type is an ordinary variant, one per operation.
+pub variant SettingError {
+  MissingEquals,
+  EmptyKey,
+  NotANumber(text: String),
+}
+
+fn parse_number(piece: String) -> Result<Int, SettingError> {
+  match int.parse(text: piece) {
+    None => Err(error: SettingError.NotANumber(text: piece)),
+    Some(value: number) => Ok(value: number),
+  }
+}
+
+// `e?` unwraps a success; on an error it returns that error from the enclosing function.
+// The error types must match exactly, so every route an error takes is visible in the code.
+pub fn parse_setting(line: String) -> Result<Setting, SettingError> {
+  let parts = split_line(line: line)?;
+  let number = parse_number(piece: text.trim(of: parts.after))?;
+  Ok(value: Setting(key: text.trim(of: parts.before), value: number))
+}
+
+example parse_bad_lines for parse_setting {
+  parse_setting(line: "volume") == Err(error: SettingError.MissingEquals)
+    and parse_setting(line: " = 3") == Err(error: SettingError.EmptyKey)
+    and parse_setting(line: "volume = loud")
+      == Err(error: SettingError.NotANumber(text: "loud"))
+}
+
+example parse_good_line for parse_setting {
+  parse_setting(line: "volume = 7")
+    == Ok(value: Setting(key: "volume", value: 7))
+}
+
+fn split_line(line: String) -> Result<text.SplitPair, SettingError> {
+  match text.split_once(of: line, separator: "=") {
+    None => Err(error: SettingError.MissingEquals),
+    Some(value: pair) => if text.is_empty(of: text.trim(of: pair.before)) {
+      Err(error: SettingError.EmptyKey)
+    } else {
+      Ok(value: pair)
+    },
+  }
+}
+
+// `?` works inside loops too: the first bad line ends the whole function with its error.
+pub fn total_of_settings(lines: List<String>) -> Result<Int, SettingError> {
+  var total: Int = 0;
+  for line in lines {
+    let setting = parse_setting(line: line)?;
+    total = total + setting.value;
+  }
+  Ok(value: total)
+}
+
+example total_stops_at_the_first_error for total_of_settings {
+  total_of_settings(lines: ["a = 1", "b = 2"]) == Ok(value: 3)
+    and total_of_settings(lines: ["a = 1", "b", "c = x"])
+      == Err(error: SettingError.MissingEquals)
+}

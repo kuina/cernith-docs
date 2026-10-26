@@ -1,0 +1,52 @@
+// Sample: A pure core and a thin io shell
+// Shows: uses io in a function type, keeping logic in pure functions, testing output with test.with_world
+// Chapter: language/11-effects.md
+// Run: cernith run examples/effects/pure_and_io.cnth
+module samples.effects.pure_and_io;
+
+import std.int;
+import std.io;
+import std.list;
+import std.test;
+
+pub fn main(args: List<String>) -> Int uses io {
+  match report(numbers: [3, 4, 5]) {
+    Ok(value: _) => 0,
+    Err(error: _) => 1,
+  }
+}
+
+// The shell is small. A function may only call functions whose effects are a subset of
+// its own, so everything that prints says `uses io`, up to `main`.
+pub fn report(numbers: List<Int>) -> Result<Unit, io.IoError> uses io {
+  for line in summary_lines(numbers: numbers) {
+    io.write_line(text: line)?;
+  }
+  Ok(value: ())
+}
+
+// An example is pure, but test.with_world runs effectful code in a simulated world and
+// hands back what it printed.
+example report_prints_the_summary for report {
+  test.with_world(
+    world: test.World(input: [], now_ms: 0, seed: 0),
+    run: fn() -> Result<Unit, io.IoError> uses io {
+      report(numbers: [4, 5])
+    },
+  ).output
+    == ["count: 2", "sum: 9"]
+}
+
+// The logic is pure: no `uses`, so it cannot print, read the clock, or roll dice, and
+// an example can call it directly.
+pub fn summary_lines(numbers: List<Int>) -> List<String> {
+  [
+    "count: " ++ int.to_text(value: numbers.length),
+    "sum: " ++ int.to_text(value: list.sum(items: numbers)),
+  ]
+}
+
+example summary_of_three_numbers for summary_lines {
+  summary_lines(numbers: [1, 2, 3]) == ["count: 3", "sum: 6"]
+    and summary_lines(numbers: []) == ["count: 0", "sum: 0"]
+}

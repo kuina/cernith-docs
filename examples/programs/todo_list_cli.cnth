@@ -1,0 +1,143 @@
+// Sample: A command-line to-do list
+// Shows: main with arguments, parsing commands into a variant, a pure state update, an exit status
+// Chapter: language/01-first-program.md
+// Run: cernith run examples/programs/todo_list_cli.cnth
+// Run-args: add:milk add:write_docs done:1
+module samples.programs.todo_list_cli;
+
+import std.int;
+import std.io;
+import std.text;
+
+pub variant Command {
+  Add(title: String),
+  Done(number: Int),
+}
+
+pub record Task {
+  done: Bool,
+  title: String,
+}
+
+pub variant TodoError {
+  NoSuchTask(number: Int),
+  NotACommand(text: String),
+}
+
+// Tasks are numbered from 1. The list is a value; apply returns the new list.
+pub fn apply(
+  tasks: List<Task>,
+  command: Command,
+) -> Result<List<Task>, TodoError> {
+  match command {
+    Command.Add(title: title) => Ok(
+      value: tasks ++ [Task(done: false, title: title)],
+    ),
+    Command.Done(number: number) => {
+      if number < 1 or number > tasks.length {
+        return Err(error: TodoError.NoSuchTask(number: number));
+      }
+      var updated: List<Task> = [];
+      for index in 0..tasks.length {
+        if index == number - 1 {
+          updated = updated ++ [Task.with(base: tasks[index], done: true)];
+        } else {
+          updated = updated ++ [tasks[index]];
+        }
+      }
+      Ok(value: updated)
+    },
+  }
+}
+
+example apply_adds_and_completes for apply {
+  apply(tasks: [], command: Command.Add(title: "milk"))
+    == Ok(value: [Task(done: false, title: "milk")])
+    and apply(
+      tasks: [Task(done: false, title: "milk")],
+      command: Command.Done(number: 1),
+    )
+      == Ok(value: [Task(done: true, title: "milk")])
+    and apply(tasks: [], command: Command.Done(number: 1))
+      == Err(error: TodoError.NoSuchTask(number: 1))
+}
+
+pub fn describe(error: TodoError) -> String {
+  match error {
+    TodoError.NoSuchTask(number: number) => "no task number "
+      ++ int.to_text(value: number),
+    TodoError.NotACommand(text: given) => "not a command: " ++ given,
+  }
+}
+
+// main prints the list, or the error, and returns the exit status.
+pub fn main(args: List<String>) -> Int uses io {
+  match run_all(arguments: args) {
+    Ok(value: tasks) => {
+      for index in 0..tasks.length {
+        discard io.write_line(
+          text: render(task: tasks[index], number: index + 1),
+        );
+      }
+      0
+    },
+    Err(error: error) => {
+      discard io.write_line(text: "error: " ++ describe(error: error));
+      1
+    },
+  }
+}
+
+// "add:milk" and "done:2" are the two commands. Anything else is an error value.
+pub fn parse_command(argument: String) -> Result<Command, TodoError> {
+  match text.split_once(of: argument, separator: ":") {
+    None => Err(error: TodoError.NotACommand(text: argument)),
+    Some(value: pair) => match pair.before {
+      "add" => Ok(value: Command.Add(title: pair.after)),
+      "done" => match int.parse(text: pair.after) {
+        Some(value: number) => Ok(value: Command.Done(number: number)),
+        None => Err(error: TodoError.NotACommand(text: argument)),
+      },
+      _ => Err(error: TodoError.NotACommand(text: argument)),
+    },
+  }
+}
+
+example parse_command_cases for parse_command {
+  parse_command(argument: "add:milk") == Ok(value: Command.Add(title: "milk"))
+    and parse_command(argument: "done:2") == Ok(value: Command.Done(number: 2))
+    and parse_command(argument: "remove:2")
+      == Err(error: TodoError.NotACommand(text: "remove:2"))
+    and parse_command(argument: "done:x")
+      == Err(error: TodoError.NotACommand(text: "done:x"))
+}
+
+pub fn render(task: Task, number: Int) -> String {
+  let mark = if task.done {
+    "[x] "
+  } else {
+    "[ ] "
+  };
+  int.to_text(value: number) ++ ". " ++ mark ++ task.title
+}
+
+example render_marks_done_tasks for render {
+  render(task: Task(done: true, title: "milk"), number: 1) == "1. [x] milk"
+    and render(task: Task(done: false, title: "eggs"), number: 2)
+      == "2. [ ] eggs"
+}
+
+// Applies every argument in order and stops at the first error.
+pub fn run_all(arguments: List<String>) -> Result<List<Task>, TodoError> {
+  var tasks: List<Task> = [];
+  for argument in arguments {
+    let command = parse_command(argument: argument)?;
+    tasks = apply(tasks: tasks, command: command)?;
+  }
+  Ok(value: tasks)
+}
+
+example run_all_applies_in_order for run_all {
+  run_all(arguments: ["add:a", "add:b", "done:2"])
+    == Ok(value: [Task(done: false, title: "a"), Task(done: true, title: "b")])
+}

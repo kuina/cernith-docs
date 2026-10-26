@@ -1,0 +1,13 @@
+// Expected: E0503
+// Mistake: Building a record that breaks its own where invariant. Reported by check --verify.
+// Fix: Build the record only from values that satisfy the condition (see types/record_invariant.cnth).
+module samples.mistakes.broken_invariant;
+
+pub record Span {
+  start: Int,
+  end: Int,
+} where start <= end;
+
+pub fn backwards() -> Span {
+  Span(start: 5, end: 1)
+}

@@ -1,0 +1,8 @@
+// Expected: E0506
+// Mistake: An index the checker cannot show to be in range. Reported by check --verify.
+// Fix: Add `requires index >= 0 and index < items.length;` or test the index before using it.
+module samples.mistakes.index_out_of_range;
+
+pub fn at(items: List<Int>, index: Int) -> Int {
+  items[index]
+}

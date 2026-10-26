@@ -1,0 +1,77 @@
+// Sample: Recursion and termination
+// Shows: decreases on a recursive function, structural recursion on a variant, why Cernith asks for a reason to stop
+// Chapter: language/13-termination.md
+module samples.contracts.recursion_termination;
+
+import std.int;
+
+// Recursion on the parts of a value needs no `decreases`: each call gets a smaller piece.
+// This is called structural recursion.
+pub variant Chain {
+  End,
+  Link(value: Int, next: Chain),
+}
+
+pub fn chain_sum(chain: Chain) -> Int {
+  match chain {
+    Chain.End => 0,
+    Chain.Link(value: value, next: next) => value + chain_sum(chain: next),
+  }
+}
+
+example chain_sum_adds_all_links for chain_sum {
+  chain_sum(
+    chain: Chain.Link(
+      value: 1,
+      next: Chain.Link(value: 2, next: Chain.Link(value: 3, next: Chain.End)),
+    ),
+  )
+    == 6
+}
+
+pub fn factorial(number: Int) -> Int {
+  requires number >= 0;
+  ensures result >= 1 and result >= number;
+  decreases number;
+
+  if number == 0 {
+    1
+  } else {
+    number * factorial(number: number - 1)
+  }
+}
+
+example factorial_examples for factorial {
+  factorial(number: 0) == 1 and factorial(number: 5) == 120
+}
+
+// Recursion needs a measure that gets smaller on every call. Here it is `second`: the
+// remainder of a division is always smaller than the divisor.
+pub fn gcd_of(first: Int, second: Int) -> Int {
+  requires first >= 0 and second >= 0;
+  decreases second;
+
+  if second == 0 {
+    first
+  } else {
+    gcd_of(
+      first: second,
+      second: int.rem_euclid(dividend: first, divisor: second),
+    )
+  }
+}
+
+example gcd_examples for gcd_of {
+  gcd_of(first: 12, second: 18) == 6
+    and gcd_of(first: 7, second: 0) == 7
+    and gcd_of(first: 17, second: 5) == 1
+}
+
+property gcd_divides_both for gcd_of(first: Int, second: Int) {
+  requires first >= 0 and second >= 0 and (first > 0 or second > 0);
+
+  let divisor = gcd_of(first: first, second: second);
+  divisor > 0
+    and int.rem_euclid(dividend: first, divisor: divisor) == 0
+    and int.rem_euclid(dividend: second, divisor: divisor) == 0
+}

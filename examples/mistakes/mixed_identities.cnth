@@ -1,0 +1,16 @@
+// Expected: E0303
+// Mistake: Two distinct types are not interchangeable even though both wrap an Int.
+// Fix: Pass a UserId where a UserId is expected; make an OrderId only where an order is meant.
+module samples.mistakes.mixed_identities;
+
+pub type OrderId = distinct Int;
+
+pub type UserId = distinct Int;
+
+pub fn confused(order: OrderId) -> Int {
+  owner_label(user: order)
+}
+
+pub fn owner_label(user: UserId) -> Int {
+  user.value
+}

@@ -1,0 +1,81 @@
+// Sample: Parallel functions on lists
+// Shows: std.parallel (map, filter, fold, any, all), why its function arguments have no effects, a property that ties it to std.list
+// Chapter: language/18-concurrency.md
+module samples.concurrency.parallel_map;
+
+import std.int;
+import std.list;
+import std.parallel;
+
+pub fn all_positive(numbers: List<Int>) -> Bool {
+  parallel.all(
+    items: numbers,
+    test: fn(item: Int) -> Bool {
+      item > 0
+    },
+  )
+}
+
+example all_positive_numbers for all_positive {
+  all_positive(numbers: [1, 2, 3]) and not all_positive(numbers: [1, 0, 3])
+}
+
+pub fn count_even(numbers: List<Int>) -> Int {
+  parallel.filter(
+    items: numbers,
+    keep: fn(item: Int) -> Bool {
+      int.rem_euclid(dividend: item, divisor: 2) == 0
+    },
+  ).length
+}
+
+example count_even_numbers for count_even {
+  count_even(numbers: [1, 2, 3, 4, 6]) == 3
+}
+
+// The promise of the module, written as a law: parallel.map and list.map agree.
+pub fn same_as_list_map(numbers: List<Int>) -> Bool {
+  squares(numbers: numbers)
+    == list.map(
+      items: numbers,
+      apply: fn(item: Int) -> Int {
+        item * item
+      },
+    )
+}
+
+property parallel_map_equals_list_map for same_as_list_map(numbers: List<Int>) {
+  same_as_list_map(numbers: numbers)
+}
+
+// parallel.map gives exactly the result of list.map. Because the function has no effects,
+// the calls cannot influence each other, so a backend may run them on several workers.
+// No `async` and no `await` is needed to use it.
+pub fn squares(numbers: List<Int>) -> List<Int> {
+  parallel.map(
+    items: numbers,
+    apply: fn(item: Int) -> Int {
+      item * item
+    },
+  )
+}
+
+example squares_in_order for squares {
+  squares(numbers: [1, 2, 3, 4]) == [1, 4, 9, 16]
+}
+
+// For fold, `combine` must be associative and `initial` its identity (0 for +): the
+// grouping of the calls is then free, and the result is the same however it is split.
+pub fn total(numbers: List<Int>) -> Int {
+  parallel.fold(
+    items: numbers,
+    initial: 0,
+    combine: fn(total: Int, item: Int) -> Int {
+      total + item
+    },
+  )
+}
+
+example total_of_numbers for total {
+  total(numbers: [1, 2, 3, 4]) == 10 and total(numbers: []) == 0
+}

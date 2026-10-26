@@ -1,0 +1,8 @@
+// Expected: E0302
+// Mistake: Int and Float64 mixed in one expression.
+// Fix: Convert explicitly: float.from_int(value: count) * factor.
+module samples.mistakes.implicit_conversion;
+
+pub fn scale(count: Int, factor: Float64) -> Float64 {
+  count * factor
+}

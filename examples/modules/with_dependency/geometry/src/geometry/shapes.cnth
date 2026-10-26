@@ -1,0 +1,39 @@
+// Sample: A library package
+// Shows: what another package may use: a transparent record, an open refined type, an abstract distinct type
+// Chapter: language/14-modules-and-packages.md
+module geometry.shapes;
+
+// Open refined type: users may write `shapes.Length(value: 2)`.
+pub type Length = Int where self >= 0;
+
+// Transparent record: users may build it and read its fields.
+pub record Rect {
+  width: Length,
+  height: Length,
+}
+
+// Abstract type: users cannot write `shapes.Side(value: 4)` or read `.value` (E0215).
+// They get a Side only from make_side and read it only with side_length.
+pub type Side = distinct Int;
+
+pub fn area(rect: Rect) -> Int {
+  rect.width * rect.height
+}
+
+example area_of_two_by_five for area {
+  area(rect: Rect(width: Length(value: 2), height: Length(value: 5))) == 10
+}
+
+pub fn make_side(value: Int) -> Side {
+  requires value >= 0;
+
+  Side(value: value)
+}
+
+pub fn side_length(side: Side) -> Int {
+  side.value
+}
+
+example side_round_trip for side_length {
+  side_length(side: make_side(value: 4)) == 4
+}

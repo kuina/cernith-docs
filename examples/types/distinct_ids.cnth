@@ -1,0 +1,54 @@
+// Sample: Distinct types
+// Shows: distinct types that wrap an Int, wrapping with Type(value: ...) and unwrapping with .value, no mixing by accident
+// Chapter: language/08-refined-and-distinct-types.md
+module samples.types.distinct_ids;
+
+import std.int;
+
+pub record Order {
+  id: OrderId,
+  owner: UserId,
+}
+
+// Both are an Int underneath, but they are different types: a function that
+// wants an OrderId will not accept a UserId (see mistakes/mixed_identities.cnth).
+pub type OrderId = distinct Int;
+
+pub type UserId = distinct Int;
+
+// Wrap with the type name; unwrap with `.value`.
+pub fn next_order_id(id: OrderId) -> OrderId {
+  OrderId(value: id.value + 1)
+}
+
+example next_order_id_adds_one for next_order_id {
+  next_order_id(id: OrderId(value: 7)) == OrderId(value: 8)
+}
+
+pub fn order_label(order: Order) -> String {
+  "order #"
+    ++ int.to_text(value: order.id.value)
+    ++ " of user "
+    ++ int.to_text(value: order.owner.value)
+}
+
+example label_names_both_ids for order_label {
+  order_label(order: Order(id: OrderId(value: 3), owner: UserId(value: 9)))
+    == "order #3 of user 9"
+}
+
+// Values of one distinct type can be compared with each other, but not with a bare Int.
+pub fn same_owner(first: Order, second: Order) -> Bool {
+  first.owner == second.owner
+}
+
+example same_owner_compares_user_ids for same_owner {
+  same_owner(
+    first: Order(id: OrderId(value: 1), owner: UserId(value: 5)),
+    second: Order(id: OrderId(value: 2), owner: UserId(value: 5)),
+  )
+    and not same_owner(
+      first: Order(id: OrderId(value: 1), owner: UserId(value: 5)),
+      second: Order(id: OrderId(value: 2), owner: UserId(value: 6)),
+    )
+}

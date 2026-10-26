@@ -1,0 +1,9 @@
+// Expected: E0323
+// Mistake: A type annotation on `let`.
+// Fix: `let` takes the type of its value. Only `var name: Type = ...;` has a type.
+module samples.mistakes.let_with_type;
+
+pub fn count() -> Int {
+  let n: Int = 3;
+  n
+}

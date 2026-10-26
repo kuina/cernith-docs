@@ -1,0 +1,69 @@
+// Sample: Loop invariants and termination
+// Shows: invariant (what holds at the top of every pass), decreases (why the loop ends), contracts that depend on the loop
+// Chapter: language/09-contracts.md
+module samples.contracts.loop_invariants;
+
+// A `for` loop over a list always ends, so it needs no `decreases`; an invariant can
+// still help the proof of the contract.
+pub fn count_negative(numbers: List<Int>) -> Int {
+  ensures result >= 0 and result <= numbers.length;
+
+  var count: Int = 0;
+  for index in 0..numbers.length {
+    invariant count >= 0 and count <= index;
+
+    if numbers[index] < 0 {
+      count = count + 1;
+    }
+  }
+  count
+}
+
+example count_negative_numbers for count_negative {
+  count_negative(numbers: [3, -1, -4, 1, -5]) == 3
+    and count_negative(numbers: []) == 0
+}
+
+// Multiplication by repeated addition. The invariant relates the three variables, so at
+// the end `total == first * second` follows from `counter == second`.
+pub fn multiply(first: Int, second: Int) -> Int {
+  requires first >= 0 and second >= 0;
+  ensures result == first * second;
+
+  var total: Int = 0;
+  var counter: Int = 0;
+  while counter < second {
+    invariant counter >= 0 and counter <= second and total == first * counter;
+    decreases second - counter;
+
+    total = total + first;
+    counter = counter + 1;
+  }
+  total
+}
+
+example multiply_small_numbers for multiply {
+  multiply(first: 6, second: 7) == 42 and multiply(first: 5, second: 0) == 0
+}
+
+// The invariant is what lets the checker prove the ensures clause after the loop:
+// at the top of each pass `total` is the sum of the numbers 0..index.
+pub fn sum_below(limit: Int) -> Int {
+  requires limit >= 0;
+  ensures result >= 0;
+
+  var total: Int = 0;
+  var index: Int = 0;
+  while index < limit {
+    invariant index >= 0 and index <= limit and total >= 0;
+    decreases limit - index;
+
+    total = total + index;
+    index = index + 1;
+  }
+  total
+}
+
+example sum_below_five for sum_below {
+  sum_below(limit: 5) == 10 and sum_below(limit: 0) == 0
+}

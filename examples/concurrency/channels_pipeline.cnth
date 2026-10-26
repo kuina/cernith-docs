@@ -1,0 +1,70 @@
+// Sample: A pipeline of channels
+// Shows: bounded channels, send and receive, close, tasks of one scope connected like a pipeline
+// Chapter: language/18-concurrency.md
+module samples.concurrency.channels_pipeline;
+
+import std.async;
+
+// producer --numbers--> doubler --doubled--> the scope's own body (the consumer)
+//
+// A channel holds at most `capacity` values: send waits when it is full and receive waits
+// when it is empty, so the tasks take turns. Channel ends can be used by the tasks of
+// the scope that created them, but cannot leave it.
+pub fn doubled_total(count: Int) -> Int {
+  requires count >= 0;
+
+  async.block_on(
+    run: fn() -> Int uses async {
+      await async.scope(
+        body: fn(tasks: async.Scope) -> Int uses async {
+          let numbers = await async.bounded::<Int>(tasks: tasks, capacity: 2);
+          let doubled = await async.bounded::<Int>(tasks: tasks, capacity: 2);
+          let producer = async.spawn(
+            tasks: tasks,
+            run: fn() -> Unit uses async {
+              for index in 0..count {
+                discard await async.send(to: numbers.sender, value: index + 1);
+              }
+              await async.close(sender: numbers.sender);
+            },
+          );
+          let doubler = async.spawn(
+            tasks: tasks,
+            run: fn() -> Unit uses async {
+              for _ in 0..count {
+                match await async.receive(from: numbers.receiver) {
+                  Some(value: value) => {
+                    discard await async.send(
+                      to: doubled.sender,
+                      value: value * 2,
+                    );
+                  },
+                  None => {},
+                }
+              }
+              await async.close(sender: doubled.sender);
+            },
+          );
+          var sum: Int = 0;
+          for _ in 0..count {
+            match await async.receive(from: doubled.receiver) {
+              Some(value: value) => {
+                sum = sum + value;
+              },
+              None => {},
+            }
+          }
+          await producer;
+          await doubler;
+          sum
+        },
+      )
+    },
+  )
+}
+
+// 1 + 2 + 3 + 4 doubled is 20. The loops are over fixed ranges, so they end by construction
+// (a loop that waits forever for a message would need a termination argument).
+example doubled_total_of_four_numbers for doubled_total {
+  doubled_total(count: 4) == 20 and doubled_total(count: 0) == 0
+}

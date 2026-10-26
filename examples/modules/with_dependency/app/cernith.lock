@@ -1,0 +1,7 @@
+# Written by `cernith lock`. A dependency whose content differs from its hash is an error (E0226).
+version = 1
+
+[[package]]
+name = "geometry"
+path = "../geometry"
+hash = "sha256:0e6145fed4914ef9d159d2b2149e096bca3e37616c98375bf24fa5f918908c7b"

@@ -1,0 +1,93 @@
+// Sample: Preconditions and postconditions
+// Shows: requires (the caller's duty), ensures (the function's promise), result, how the checker uses both
+// Chapter: language/09-contracts.md
+module samples.contracts.requires_ensures;
+
+// `ensures` describes the result for every input; `result` names the returned value.
+// check --verify proves it, or reports a counterexample.
+pub fn absolute(value: Int) -> Int {
+  ensures result >= 0;
+  ensures result == value or result == -value;
+
+  if value < 0 {
+    -value
+  } else {
+    value
+  }
+}
+
+example absolute_of_both_signs for absolute {
+  absolute(value: -4) == 4
+    and absolute(value: 4) == 4
+    and absolute(value: 0) == 0
+}
+
+// A contract can state how the result relates to the arguments, not only its range.
+pub fn clamp(value: Int, low: Int, high: Int) -> Int {
+  requires low <= high;
+  ensures result >= low and result <= high;
+  ensures value >= low and value <= high implies result == value;
+
+  if value < low {
+    low
+  } else if value > high {
+    high
+  } else {
+    value
+  }
+}
+
+example clamp_cases for clamp {
+  clamp(value: 12, low: 0, high: 9) == 9
+    and clamp(value: -1, low: 0, high: 9) == 0
+    and clamp(value: 5, low: 0, high: 9) == 5
+}
+
+property clamp_stays_in_range for clamp(value: Int, low: Int, high: Int) {
+  requires low <= high;
+
+  let r = clamp(value: value, low: low, high: high);
+  r >= low and r <= high
+}
+
+// `requires` is a promise the CALLER makes. Inside the function the condition can be
+// assumed; every call is checked against it. Here the index is guaranteed to be in range.
+pub fn element_at(items: List<Int>, index: Int) -> Int {
+  requires index >= 0 and index < items.length;
+
+  items[index]
+}
+
+example element_at_reads_the_list for element_at {
+  element_at(items: [10, 20, 30], index: 1) == 20
+}
+
+// A caller that cannot show the condition must test it first, and then the proof goes through.
+pub fn element_or(items: List<Int>, index: Int, default: Int) -> Int {
+  if index >= 0 and index < items.length {
+    element_at(items: items, index: index)
+  } else {
+    default
+  }
+}
+
+example element_or_falls_back for element_or {
+  element_or(items: [10, 20], index: 1, default: 0) == 20
+    and element_or(items: [10, 20], index: 5, default: 0) == 0
+    and element_or(items: [10, 20], index: -1, default: 0) == 0
+}
+
+pub fn larger(first: Int, second: Int) -> Int {
+  ensures result >= first and result >= second;
+  ensures result == first or result == second;
+
+  if first >= second {
+    first
+  } else {
+    second
+  }
+}
+
+example larger_of_two for larger {
+  larger(first: 3, second: 9) == 9 and larger(first: 9, second: 3) == 9
+}

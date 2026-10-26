@@ -1,0 +1,52 @@
+// Sample: Generics
+// Shows: type parameters on functions and records, bounds (Eq, Ord), type arguments inferred from the call
+// Chapter: language/06-functions.md
+module samples.types.generics;
+
+// A generic record: Pair<Int, String> and Pair<Bool, Bool> are different types.
+pub record Pair<A, B> {
+  left: A,
+  right: B,
+}
+
+// One function for every element type: the type variable T is fixed by the arguments.
+pub fn first_or<T>(items: List<T>, default: T) -> T {
+  if items.length == 0 {
+    default
+  } else {
+    items[0]
+  }
+}
+
+example first_or_uses_the_default_when_empty for first_or {
+  first_or(items: [4, 5], default: 0) == 4
+    and first_or(items: [], default: 9) == 9
+    and first_or(items: ["a"], default: "z") == "a"
+}
+
+pub fn larger<T: Ord>(first: T, second: T) -> T {
+  if first < second {
+    second
+  } else {
+    first
+  }
+}
+
+example comparisons_work_for_several_types for larger {
+  larger(first: 3, second: 8) == 8
+    and larger(first: "pear", second: "apple") == "pear"
+    and same(first: Pair(left: 1, right: 2), second: Pair(left: 1, right: 2))
+}
+
+// A bound says what the type must support. `==` needs Eq; `<` needs Ord.
+pub fn same<T: Eq>(first: T, second: T) -> Bool {
+  first == second
+}
+
+pub fn swap<A, B>(pair: Pair<A, B>) -> Pair<B, A> {
+  Pair(left: pair.right, right: pair.left)
+}
+
+example swap_exchanges_the_sides for swap {
+  swap(pair: Pair(left: 1, right: "one")) == Pair(left: "one", right: 1)
+}

@@ -1,0 +1,54 @@
+// Sample: Binary search with a specification function
+// Shows: spec fn and forall in a precondition, a loop invariant that keeps the answer in range, an ensures that describes both outcomes
+// Chapter: language/09-contracts.md
+module samples.contracts.binary_search;
+
+import std.int;
+
+// Finds `target` in a sorted list. The result is the position of an element equal to `target`,
+// or None. `low..high` is the part of the list that can still contain it.
+pub fn find(items: List<Int>, target: Int) -> Option<Int> {
+  requires is_sorted(items: items);
+  ensures match result {
+    Some(value: position) => position >= 0
+      and position < items.length
+      and items[position] == target,
+    None => true,
+  };
+
+  var low: Int = 0;
+  var high: Int = items.length;
+  var found: Option<Int> = None;
+  while low < high {
+    invariant low >= 0 and high <= items.length and low <= high;
+    invariant match found {
+      Some(value: position) => position >= 0
+        and position < items.length
+        and items[position] == target,
+      None => true,
+    };
+    decreases high - low;
+
+    let middle = low + int.div_floor(dividend: high - low, divisor: 2);
+    if items[middle] == target {
+      found = Some(value: middle);
+      low = high;
+    } else if items[middle] < target {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  found
+}
+
+example finds_present_and_absent_values for find {
+  find(items: [1, 3, 5, 7, 9], target: 7) == Some(value: 3)
+    and find(items: [1, 3, 5, 7, 9], target: 4) == None
+    and find(items: [], target: 1) == None
+}
+
+// A `spec fn` exists for contracts only: it cannot be called from ordinary code.
+pub spec fn is_sorted(items: List<Int>) -> Bool {
+  forall index in 0..items.length - 1: items[index] <= items[index + 1]
+}

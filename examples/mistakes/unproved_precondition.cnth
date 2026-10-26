@@ -1,0 +1,14 @@
+// Expected: E0501
+// Mistake: A call that can break the callee's requires clause. Reported by check --verify.
+// Fix: Test the condition before the call (if items.length > 0 { ... }) or require it in the caller.
+module samples.mistakes.unproved_precondition;
+
+pub fn first_of(items: List<Int>) -> Int {
+  requires items.length > 0;
+
+  items[0]
+}
+
+pub fn head(items: List<Int>) -> Int {
+  first_of(items: items)
+}

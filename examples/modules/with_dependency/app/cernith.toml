@@ -1,0 +1,5 @@
+name = "app"
+entry = "app.main"
+
+[dependencies]
+geometry = { path = "../geometry" }

@@ -1,0 +1,10 @@
+// Expected: E0503
+// Mistake: Constructing a refined type from a value that can be out of range. Reported by check --verify.
+// Fix: Clamp the number first, use Percent.check, or require the range in the caller.
+module samples.mistakes.unproved_restriction;
+
+pub type Percent = Int where self >= 0 and self <= 100;
+
+pub fn make(number: Int) -> Percent {
+  Percent(value: number)
+}

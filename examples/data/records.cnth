@@ -1,0 +1,55 @@
+// Sample: Records
+// Shows: record declaration, construction with labels, field access, copy-with-change, a record inside a record
+// Chapter: language/07-records-and-variants.md
+module samples.data.records;
+
+pub record Point {
+  x: Int,
+  y: Int,
+}
+
+pub record Segment {
+  start: Point,
+  end: Point,
+}
+
+// Fields of nested records are read with a chain of dots.
+pub fn horizontal_length(segment: Segment) -> Int {
+  segment.end.x - segment.start.x
+}
+
+example horizontal_length_of_segment for horizontal_length {
+  horizontal_length(
+    segment: Segment(start: Point(x: 1, y: 5), end: Point(x: 7, y: 5)),
+  )
+    == 6
+}
+
+// `==` compares records field by field.
+pub fn is_origin(point: Point) -> Bool {
+  point == origin()
+}
+
+example is_origin_compares_all_fields for is_origin {
+  is_origin(point: Point(x: 0, y: 0))
+    and not is_origin(point: Point(x: 0, y: 1))
+}
+
+// A record is built with every field labeled, in declaration order.
+pub fn origin() -> Point {
+  Point(x: 0, y: 0)
+}
+
+example origin_is_zero for origin {
+  origin().x == 0 and origin().y == 0
+}
+
+// `Point.with(base: p, x: ...)` copies a record and changes the named fields.
+// Records are values: the original is never modified.
+pub fn shift_right(point: Point, amount: Int) -> Point {
+  Point.with(base: point, x: point.x + amount)
+}
+
+example shift_right_keeps_y for shift_right {
+  shift_right(point: Point(x: 1, y: 2), amount: 10) == Point(x: 11, y: 2)
+}

@@ -1,0 +1,49 @@
+// Sample: Labeled arguments and bindings
+// Shows: labels at every call, let and var, the final expression as the value, explicit Int to Float64 conversion
+// Chapter: language/06-functions.md
+// Allow: W0504
+module samples.basics.labeled_arguments;
+
+import std.float;
+import std.int;
+
+// Int and Float64 are never mixed implicitly: convert with float.from_int.
+// `/` is allowed on Float64 only; Int division needs a named rounding rule.
+// float.from_int is exact only up to 2^53, so it has a `requires`; the checker
+// makes this function repeat that condition instead of letting a caller hit a defect.
+// (The solver cannot decide Float64 arithmetic, so `check --verify` leaves warning W0504
+// for the division: the result is checked when the program runs.)
+pub fn average(first: Int, second: Int) -> Float64 {
+  requires first + second >= -9007199254740992
+    and first + second <= 9007199254740992;
+
+  float.from_int(value: first + second) / 2.0
+}
+
+example average_of_three_and_four for average {
+  average(first: 3, second: 4) == 3.5
+}
+
+// Every argument is passed with its label, in the order of the declaration.
+// The call site alone tells the reader which number is the width.
+pub fn rectangle_area(width: Int, height: Int) -> Int {
+  width * height
+}
+
+example area_of_three_by_four for rectangle_area {
+  rectangle_area(width: 3, height: 4) == 12
+}
+
+// `let` binds a value that never changes; `var` is a local variable that does.
+// A `var` needs a type, a `let` does not. The last expression has no `;`:
+// it is the value of the function.
+pub fn rectangle_summary(width: Int, height: Int) -> String {
+  let area = rectangle_area(width: width, height: height);
+  var text: String = "area=" ++ int.to_text(value: area);
+  text = text ++ ", perimeter=" ++ int.to_text(value: 2 * (width + height));
+  text
+}
+
+example summary_of_three_by_four for rectangle_summary {
+  rectangle_summary(width: 3, height: 4) == "area=12, perimeter=14"
+}

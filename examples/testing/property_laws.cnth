@@ -1,0 +1,57 @@
+// Sample: Laws as properties
+// Shows: algebraic laws (inverse, idempotence, preserved length, additivity) written as properties of small functions
+// Chapter: language/16-testing.md
+module samples.testing.property_laws;
+
+import std.list;
+
+// Law: sorting keeps the number of elements, and the result is in order.
+pub fn is_in_order(items: List<Int>) -> Bool {
+  var ordered: Bool = true;
+  for index in 0..items.length {
+    if index > 0 and items[index - 1] > items[index] {
+      ordered = false;
+    }
+  }
+  ordered
+}
+
+property sorted_lists_are_in_order for is_in_order(items: List<Int>) {
+  is_in_order(items: list.sort(items: items))
+    and list.sort(items: items).length == items.length
+}
+
+// A property is attached to a function of the same module, so each law is stated
+// about a small function that applies the operations being studied.
+// Law: undoing twice gives back the original (reverse is its own inverse).
+pub fn reverse_twice(items: List<Int>) -> List<Int> {
+  list.reverse(items: list.reverse(items: items))
+}
+
+property reverse_twice_is_the_identity for reverse_twice(items: List<Int>) {
+  reverse_twice(items: items) == items
+}
+
+// Law: sorting twice is the same as sorting once (idempotence).
+pub fn sort_twice(items: List<Int>) -> List<Int> {
+  list.sort(items: list.sort(items: items))
+}
+
+property sorting_again_changes_nothing for sort_twice(items: List<Int>) {
+  sort_twice(items: items) == list.sort(items: items)
+}
+
+// Law: the sum of two lists put together is the sum of the sums (additivity).
+pub fn sum_of_both(first: List<Int>, second: List<Int>) -> Int {
+  list.sum(items: first ++ second)
+}
+
+// An example fixes one case; the properties cover the shape of all of them.
+example sum_of_both_lists for sum_of_both {
+  sum_of_both(first: [1, 2], second: [3]) == 6
+}
+
+property sum_is_additive for sum_of_both(first: List<Int>, second: List<Int>) {
+  sum_of_both(first: first, second: second)
+    == list.sum(items: first) + list.sum(items: second)
+}

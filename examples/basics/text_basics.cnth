@@ -1,0 +1,97 @@
+// Sample: Working with text
+// Shows: std.text functions with their `of:` label, split and join, trim, padding, length in characters
+// Chapter: stdlib/text.md
+module samples.basics.text_basics;
+
+import std.int;
+import std.list;
+import std.text;
+
+// Splitting yields a List<String>; the parts are cleaned up with list.map.
+// The function passed to list.map is called through the label `item`.
+pub fn csv_fields(line: String) -> List<String> {
+  list.map(
+    items: text.split(of: line, separator: ","),
+    apply: fn(item: String) -> String {
+      text.trim(of: item)
+    },
+  )
+}
+
+example csv_fields_of_empty_text for csv_fields {
+  csv_fields(line: "") == [""]
+}
+
+example csv_fields_trims_each_part for csv_fields {
+  csv_fields(line: " a, b ,c ") == ["a", "b", "c"]
+}
+
+// A function that is only used here is easier to read as a named helper.
+pub fn first_letter(word: String) -> String {
+  if text.is_empty(of: word) {
+    ""
+  } else {
+    text.slice(of: word, from: 0, to: 1)
+  }
+}
+
+example first_letter_of_words for first_letter {
+  first_letter(word: "cernith") == "c" and first_letter(word: "") == ""
+}
+
+pub fn initials(full_name: String) -> String {
+  let words = list.filter(
+    items: text.split(of: full_name, separator: " "),
+    keep: fn(item: String) -> Bool {
+      not text.is_empty(of: item)
+    },
+  );
+  text.to_upper(
+    of: text.join(
+      parts: list.map(
+        items: words,
+        apply: fn(item: String) -> String {
+          first_letter(word: item)
+        },
+      ),
+      separator: "",
+    ),
+  )
+}
+
+example initials_skip_extra_spaces for initials {
+  initials(full_name: "ada  lovelace") == "AL" and initials(full_name: "") == ""
+}
+
+// Positions and lengths count characters (Unicode scalar values), not bytes.
+pub fn is_short(word: String) -> Bool {
+  word.length <= 5
+}
+
+example length_counts_characters for is_short {
+  "héllo".length == 5
+    and is_short(word: "héllo")
+    and not is_short(word: "cernith")
+}
+
+// Searching returns an Option: Some(position) or None, never a magic number like -1.
+pub fn position_of(word: String, part: String) -> Option<Int> {
+  text.index_of(of: word, part: part)
+}
+
+example position_of_part for position_of {
+  position_of(word: "cernith", part: "nit") == Some(value: 3)
+    and position_of(word: "cernith", part: "xyz") == None
+}
+
+// pad_start fills on the left up to a width; the fill must be one character.
+pub fn zero_padded(value: Int, width: Int) -> String {
+  requires width >= 0;
+
+  text.pad_start(of: int.to_text(value: value), width: width, fill: "0")
+}
+
+example zero_padding for zero_padded {
+  zero_padded(value: 42, width: 5) == "00042"
+    and zero_padded(value: 123456, width: 3) == "123456"
+}

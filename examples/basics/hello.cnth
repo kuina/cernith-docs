@@ -1,0 +1,25 @@
+// Sample: Hello, world
+// Shows: module and import, a pure function with an example, main with the io effect, matching on a Result
+// Chapter: language/01-first-program.md
+// Run: cernith run examples/basics/hello.cnth
+module samples.basics.hello;
+
+import std.io;
+
+// A pure function: it declares no effects, so it cannot touch the outside world.
+pub fn greeting(name: String) -> String {
+  "Hello, " ++ name ++ "!"
+}
+
+example greets_by_name for greeting {
+  greeting(name: "Cernith") == "Hello, Cernith!"
+}
+
+// `uses io` is part of the type: only code that declares it may print.
+// The exit status of the program is the Int that main returns.
+pub fn main(args: List<String>) -> Int uses io {
+  match io.write_line(text: greeting(name: "world")) {
+    Ok(value: _) => 0,
+    Err(error: _) => 1,
+  }
+}

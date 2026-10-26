@@ -1,0 +1,68 @@
+// Sample: Integer division
+// Shows: why `/` is rejected on Int, the three rounding rules and their remainders
+// Chapter: language/03-types.md
+module samples.basics.integer_division;
+
+import std.int;
+
+// A divisor of zero is not an error value but a mistake in the caller: the
+// functions require a non-zero divisor, so `requires` passes that duty on.
+// The identity in this function is proved for every pair of arguments.
+pub fn euclid_identity_holds(dividend: Int, divisor: Int) -> Bool {
+  requires divisor != 0;
+
+  let quotient = int.div_euclid(dividend: dividend, divisor: divisor);
+  let remainder = int.rem_euclid(dividend: dividend, divisor: divisor);
+  dividend == divisor * quotient + remainder and remainder >= 0
+}
+
+property euclid_division_is_consistent for euclid_identity_holds(
+  dividend: Int,
+  divisor: Int,
+) {
+  requires divisor != 0;
+
+  euclid_identity_holds(dividend: dividend, divisor: divisor)
+}
+
+// There is no `/` on Int, because the result of dividing a negative number depends
+// on the rounding rule. You name the rule you mean (see mistakes/unqualified_division.cnth).
+//
+//   -7 / 2   floor: -4   trunc: -3   euclid: -4
+//   -7 / -2  floor:  3   trunc:  3   euclid:  4
+pub fn halve_rounding_down(value: Int) -> Int {
+  int.div_floor(dividend: value, divisor: 2)
+}
+
+example halving_negative_numbers for halve_rounding_down {
+  halve_rounding_down(value: -7) == -4
+    and halve_toward_zero(value: -7) == -3
+    and halve_rounding_down(value: 7) == 3
+    and halve_toward_zero(value: 7) == 3
+}
+
+pub fn halve_toward_zero(value: Int) -> Int {
+  int.div_trunc(dividend: value, divisor: 2)
+}
+
+// Each rule has the remainder that goes with it: dividend == divisor * quotient + remainder.
+//   floor:  the remainder has the sign of the divisor
+//   trunc:  the remainder has the sign of the dividend
+//   euclid: the remainder is never negative
+pub fn remainders(dividend: Int, divisor: Int) -> List<Int> {
+  requires divisor != 0;
+
+  [
+    int.rem_floor(dividend: dividend, divisor: divisor),
+    int.rem_trunc(dividend: dividend, divisor: divisor),
+    int.rem_euclid(dividend: dividend, divisor: divisor),
+  ]
+}
+
+example remainders_of_minus_seven_by_minus_two for remainders {
+  remainders(dividend: -7, divisor: -2) == [-1, -1, 1]
+}
+
+example remainders_of_minus_seven_by_two for remainders {
+  remainders(dividend: -7, divisor: 2) == [1, -1, 1]
+}

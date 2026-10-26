@@ -1,0 +1,82 @@
+// Sample: Control flow
+// Shows: if as an expression, match on integers, for over a range, while with a termination measure
+// Chapter: language/05-statements.md
+module samples.basics.control_flow;
+
+import std.int;
+
+// `if` is an expression: every branch has the same type and the whole `if` is the result.
+pub fn describe_sign(value: Int) -> String {
+  if value < 0 {
+    "negative"
+  } else if value == 0 {
+    "zero"
+  } else {
+    "positive"
+  }
+}
+
+example signs for describe_sign {
+  describe_sign(value: -5) == "negative"
+    and describe_sign(value: 0) == "zero"
+    and describe_sign(value: 8) == "positive"
+}
+
+// A `while` loop must say why it ends: `decreases` names a non-negative Int
+// that gets smaller on every pass.
+pub fn digit_count(value: Int) -> Int {
+  requires value >= 0;
+
+  var rest: Int = value;
+  var count: Int = 1;
+  while rest >= 10 {
+    decreases rest;
+
+    rest = int.div_floor(dividend: rest, divisor: 10);
+    count = count + 1;
+  }
+  count
+}
+
+example digit_counts for digit_count {
+  digit_count(value: 0) == 1
+    and digit_count(value: 9) == 1
+    and digit_count(value: 10) == 2
+    and digit_count(value: 12345) == 5
+}
+
+// `for` walks a range. `0..=limit` includes `limit`; `0..limit` would stop before it.
+pub fn sum_to(limit: Int) -> Int {
+  requires limit >= 0;
+
+  var total: Int = 0;
+  for number in 0..=limit {
+    total = total + number;
+  }
+  total
+}
+
+example sum_to_ten for sum_to {
+  sum_to(limit: 10) == 55 and sum_to(limit: 0) == 0
+}
+
+// `match` must cover every case. For integers that means a final `_` arm.
+// Every arm ends with a comma.
+pub fn weekday_name(day: Int) -> String {
+  match day {
+    1 => "Monday",
+    2 => "Tuesday",
+    3 => "Wednesday",
+    4 => "Thursday",
+    5 => "Friday",
+    6 => "Saturday",
+    7 => "Sunday",
+    _ => "unknown",
+  }
+}
+
+example weekdays for weekday_name {
+  weekday_name(day: 1) == "Monday"
+    and weekday_name(day: 7) == "Sunday"
+    and weekday_name(day: 9) == "unknown"
+}

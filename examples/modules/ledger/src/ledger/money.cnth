@@ -1,0 +1,26 @@
+// Sample: A module with a public refined type and functions
+// Shows: pub items that other modules may use, a refined type that stays open, examples inside the module
+// Chapter: language/14-modules-and-packages.md
+module ledger.money;
+
+import std.int;
+import std.text;
+
+// A refined type is open: other modules may write `money.Cents(value: 5)` and the
+// condition guards every construction.
+pub type Cents = Int where self >= 0;
+
+// Formats 1234 as "12.34". Needs the `text` module for padding.
+pub fn format(amount: Cents) -> String {
+  let whole = int.div_floor(dividend: amount, divisor: 100);
+  let part = int.rem_euclid(dividend: amount, divisor: 100);
+  int.to_text(value: whole)
+    ++ "."
+    ++ text.pad_start(of: int.to_text(value: part), width: 2, fill: "0")
+}
+
+example format_shows_two_decimals for format {
+  format(amount: Cents(value: 1234)) == "12.34"
+    and format(amount: Cents(value: 5)) == "0.05"
+    and format(amount: Cents(value: 0)) == "0.00"
+}

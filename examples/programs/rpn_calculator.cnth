@@ -1,0 +1,122 @@
+// Sample: A reverse Polish notation calculator
+// Shows: errors as values with ?, a for loop that updates a var, match on text, a thin main around pure logic
+// Chapter: language/12-errors-and-defects.md
+// Run: cernith run examples/programs/rpn_calculator.cnth
+// Run-args: "3 4 + 2 *"
+module samples.programs.rpn_calculator;
+
+import std.int;
+import std.io;
+import std.list;
+import std.text;
+
+pub variant CalcError {
+  BadToken(token: String),
+  DivideByZero,
+  EmptyExpression,
+  LeftOver(count: Int),
+  NotEnoughValues(operator: String),
+}
+
+// Pops two values, applies the operator, and pushes the result.
+fn apply_operator(
+  stack: List<Int>,
+  operator: String,
+) -> Result<List<Int>, CalcError> {
+  if stack.length < 2 {
+    return Err(error: CalcError.NotEnoughValues(operator: operator));
+  }
+  let left = stack[stack.length - 2];
+  let right = stack[stack.length - 1];
+  let rest = list.slice(items: stack, from: 0, to: stack.length - 2);
+  let value = match operator {
+    "+" => left + right,
+    "-" => left - right,
+    "*" => left * right,
+    "/" => {
+      if right == 0 {
+        return Err(error: CalcError.DivideByZero);
+      }
+      int.div_floor(dividend: left, divisor: right)
+    },
+    _ => {
+      return Err(error: CalcError.BadToken(token: operator));
+    },
+  };
+  Ok(value: rest ++ [value])
+}
+
+pub fn describe(error: CalcError) -> String {
+  match error {
+    CalcError.BadToken(token: token) => "unknown token: " ++ token,
+    CalcError.DivideByZero => "division by zero",
+    CalcError.EmptyExpression => "nothing to calculate",
+    CalcError.LeftOver(count: count) => int.to_text(value: count)
+      ++ " values left on the stack",
+    CalcError.NotEnoughValues(operator: operator) => "not enough values for "
+      ++ operator,
+  }
+}
+
+// "3 4 + 2 *" means (3 + 4) * 2. Numbers are pushed; an operator works on the top two.
+pub fn evaluate(expression: String) -> Result<Int, CalcError> {
+  var stack: List<Int> = [];
+  for token in text.split(of: expression, separator: " ") {
+    if not text.is_empty(of: token) {
+      match int.parse(text: token) {
+        Some(value: number) => {
+          stack = stack ++ [number];
+        },
+        None => {
+          stack = apply_operator(stack: stack, operator: token)?;
+        },
+      }
+    }
+  }
+  if stack.length == 0 {
+    Err(error: CalcError.EmptyExpression)
+  } else if stack.length > 1 {
+    Err(error: CalcError.LeftOver(count: stack.length))
+  } else {
+    Ok(value: stack[0])
+  }
+}
+
+example evaluate_good_expressions for evaluate {
+  evaluate(expression: "3 4 + 2 *") == Ok(value: 14)
+    and evaluate(expression: "10 2 8 * + 3 -") == Ok(value: 23)
+    and evaluate(expression: "  7 ") == Ok(value: 7)
+    and evaluate(expression: "7 2 /") == Ok(value: 3)
+}
+
+example evaluate_reports_each_kind_of_error for evaluate {
+  evaluate(expression: "") == Err(error: CalcError.EmptyExpression)
+    and evaluate(expression: "1 +")
+      == Err(error: CalcError.NotEnoughValues(operator: "+"))
+    and evaluate(expression: "1 0 /") == Err(error: CalcError.DivideByZero)
+    and evaluate(expression: "1 2") == Err(error: CalcError.LeftOver(count: 2))
+    and evaluate(expression: "1 2 ^")
+      == Err(error: CalcError.BadToken(token: "^"))
+}
+
+// main: the first argument is the expression. The exit status is 0 on success, 1 on error.
+pub fn main(args: List<String>) -> Int uses io {
+  let expression = if args.length > 0 {
+    args[0]
+  } else {
+    "1 2 +"
+  };
+  let outcome = evaluate(expression: expression);
+  let line = match outcome {
+    Ok(value: answer) => int.to_text(value: answer),
+    Err(error: error) => "error: " ++ describe(error: error),
+  };
+  let status = match outcome {
+    Ok(value: _) => 0,
+    Err(error: _) => 1,
+  };
+  match io.write_line(text: line) {
+    Ok(value: _) => status,
+    Err(error: _) => 2,
+  }
+}

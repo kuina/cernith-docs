@@ -1,0 +1,11 @@
+// Expected: E0204
+// Mistake: A name that is bound but never read.
+// Fix: Remove the binding, or write `_` for a pattern or loop variable you do not need.
+module samples.mistakes.unused_binding;
+
+pub fn first(items: List<Int>) -> Int {
+  requires items.length > 0;
+
+  let spare = items.length;
+  items[0]
+}

@@ -1,0 +1,71 @@
+// Sample: Your own error types
+// Shows: one error variant per operation, converting an inner error into an outer one with result.map_error
+// Chapter: language/12-errors-and-defects.md
+module samples.errors.custom_error_variant;
+
+import std.int;
+import std.result;
+import std.text;
+
+pub type Age = Int where self >= 0 and self <= 150;
+
+// The inner operation has its own errors...
+pub variant AgeError {
+  NotANumber,
+  OutOfRange(value: Int),
+}
+
+pub record Member {
+  name: String,
+  age: Age,
+}
+
+// ...and the outer one wraps them. Cernith never converts errors by itself: `?` would
+// reject a mismatch (E0309), so the conversion is written down where it happens.
+pub variant RegistrationError {
+  EmptyName,
+  BadAge(error: AgeError),
+}
+
+pub fn parse_age(source: String) -> Result<Age, AgeError> {
+  match int.parse(text: source) {
+    None => Err(error: AgeError.NotANumber),
+    Some(value: number) => match Age.check(value: number) {
+      None => Err(error: AgeError.OutOfRange(value: number)),
+      Some(value: age) => Ok(value: age),
+    },
+  }
+}
+
+example parse_age_cases for parse_age {
+  parse_age(source: "42") == Ok(value: Age(value: 42))
+    and parse_age(source: "x") == Err(error: AgeError.NotANumber)
+    and parse_age(source: "200") == Err(error: AgeError.OutOfRange(value: 200))
+}
+
+pub fn register(
+  name: String,
+  age_text: String,
+) -> Result<Member, RegistrationError> {
+  if text.is_empty(of: text.trim(of: name)) {
+    return Err(error: RegistrationError.EmptyName);
+  }
+  let age = result.map_error(
+    outcome: parse_age(source: age_text),
+    apply: fn(error: AgeError) -> RegistrationError {
+      RegistrationError.BadAge(error: error)
+    },
+  )?;
+  Ok(value: Member(name: text.trim(of: name), age: age))
+}
+
+example register_cases for register {
+  register(name: " Ada ", age_text: "36")
+    == Ok(value: Member(name: "Ada", age: Age(value: 36)))
+    and register(name: " ", age_text: "36")
+      == Err(error: RegistrationError.EmptyName)
+    and register(name: "Ada", age_text: "-1")
+      == Err(
+        error: RegistrationError.BadAge(error: AgeError.OutOfRange(value: -1)),
+      )
+}

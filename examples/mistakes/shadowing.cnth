@@ -1,0 +1,10 @@
+// Expected: E0203
+// Mistake: A name bound again while the first binding is still in scope.
+// Fix: Use a different name for the second binding.
+module samples.mistakes.shadowing;
+
+pub fn total(value: Int) -> Int {
+  let doubled = value * 2;
+  let doubled = doubled + 1;
+  doubled
+}

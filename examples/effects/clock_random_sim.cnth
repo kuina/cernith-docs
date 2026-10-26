@@ -1,0 +1,69 @@
+// Sample: Time and randomness in tests
+// Shows: the clock and random effects, a simulated world with a fixed clock and seed, repeatable results
+// Chapter: language/11-effects.md
+module samples.effects.clock_random_sim;
+
+import std.clock;
+import std.random;
+import std.test;
+
+// Reading the clock is an effect, so the function says `uses clock`.
+pub fn elapsed_since(start_ms: Int) -> Int uses clock {
+  clock.now_ms() - start_ms
+}
+
+// Inside with_world the clock always shows `now_ms` and time never advances.
+example elapsed_time_uses_the_fixed_clock for elapsed_since {
+  test.with_world(
+    world: test.World(input: [], now_ms: 1000, seed: 0),
+    run: fn() -> Int uses clock {
+      elapsed_since(start_ms: 400)
+    },
+  ).value
+    == 600
+}
+
+// Randomness is an effect too. In a real run the numbers are unpredictable; in a
+// simulated world they follow the seed, so a test can state the exact result.
+pub fn roll_die() -> Int uses random {
+  random.int_between(low: 1, high: 6)
+}
+
+// Every call of roll_die in the world draws the next number of the same sequence.
+example three_rolls_in_one_world for roll_die {
+  test.with_world(
+    world: test.World(input: [], now_ms: 0, seed: 0),
+    run: fn() -> List<Int> uses random {
+      [roll_die(), roll_die(), roll_die()]
+    },
+  ).value
+    == [2, 1, 2]
+}
+
+pub fn roll_two_dice() -> List<Int> uses random {
+  let first = roll_die();
+  let second = roll_die();
+  [first, second]
+}
+
+example another_seed_gives_other_dice for roll_two_dice {
+  test.with_world(
+    world: test.World(input: [], now_ms: 0, seed: 1),
+    run: fn() -> List<Int> uses random {
+      roll_two_dice()
+    },
+  ).value
+    == [6, 2]
+}
+
+// With seed 0 the first draws of int_between(1, 6) are 2, 1, 2, 5 (see the table in
+// the std.test page). The same seed gives the same dice every time.
+example the_seed_decides_the_dice for roll_two_dice {
+  test.with_world(
+    world: test.World(input: [], now_ms: 0, seed: 0),
+    run: fn() -> List<Int> uses random {
+      roll_two_dice()
+    },
+  ).value
+    == [2, 1]
+}

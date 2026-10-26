@@ -1,0 +1,161 @@
+// Sample: A small tokenizer
+// Shows: while loops with decreases over a list of characters, a variant for the result, errors with positions
+// Chapter: language/13-termination.md
+module samples.programs.tokenizer;
+
+import std.int;
+import std.list;
+import std.text;
+
+pub variant LexError {
+  UnexpectedCharacter(character: String, position: Int),
+}
+
+pub variant Token {
+  Identifier(name: String),
+  LeftParen,
+  Minus,
+  Number(value: Int),
+  Plus,
+  RightParen,
+  Star,
+}
+
+fn is_digit(character: String) -> Bool {
+  character >= "0" and character <= "9"
+}
+
+fn is_letter(character: String) -> Bool {
+  (character >= "a" and character <= "z")
+    or (character >= "A" and character <= "Z")
+    or character == "_"
+}
+
+// The checker cannot see that `keep` accepts the character at `start`, so the loop's
+// progress is stated here: the next index is always greater than the current one.
+fn next_index(start: Int, end: Int, length: Int) -> Int {
+  requires start >= 0 and start < length and end <= length;
+  ensures result > start and result <= length;
+
+  if end > start {
+    end
+  } else {
+    start + 1
+  }
+}
+
+fn number_from(digits: String) -> Int {
+  match int.parse(text: digits) {
+    Some(value: number) => number,
+    None => 0,
+  }
+}
+
+// Reads characters while `keep` says yes and returns the index after the last one.
+// A function you pass may name its parameters differently from the type (`candidate`
+// here, `character` in the type), and a name already bound outside cannot be reused.
+// `decreases` names what shrinks on every pass: the characters still to look at.
+fn skip_while(
+  characters: List<String>,
+  start: Int,
+  keep: fn(character: String) -> Bool,
+) -> Int {
+  requires start >= 0 and start <= characters.length;
+  ensures result >= start and result <= characters.length;
+
+  var index: Int = start;
+  while index < characters.length and keep(character: characters[index]) {
+    invariant index >= start and index <= characters.length;
+    decreases characters.length - index;
+
+    index = index + 1;
+  }
+  index
+}
+
+pub fn tokenize(source: String) -> Result<List<Token>, LexError> {
+  let characters = text.chars(of: source);
+  var tokens: List<Token> = [];
+  var index: Int = 0;
+  while index < characters.length {
+    invariant index >= 0 and index <= characters.length;
+    decreases characters.length - index;
+
+    let character = characters[index];
+    if text.is_space(of: character) {
+      index = index + 1;
+    } else if is_digit(character: character) {
+      let end = skip_while(
+        characters: characters,
+        start: index,
+        keep: fn(candidate: String) -> Bool {
+          is_digit(character: candidate)
+        },
+      );
+      let digits = text.join(
+        parts: list.slice(items: characters, from: index, to: end),
+        separator: "",
+      );
+      tokens = tokens ++ [Token.Number(value: number_from(digits: digits))];
+      index = next_index(start: index, end: end, length: characters.length);
+    } else if is_letter(character: character) {
+      let end = skip_while(
+        characters: characters,
+        start: index,
+        keep: fn(candidate: String) -> Bool {
+          is_letter(character: candidate) or is_digit(character: candidate)
+        },
+      );
+      let name = text.join(
+        parts: list.slice(items: characters, from: index, to: end),
+        separator: "",
+      );
+      tokens = tokens ++ [Token.Identifier(name: name)];
+      index = next_index(start: index, end: end, length: characters.length);
+    } else {
+      let single = match character {
+        "(" => Token.LeftParen,
+        ")" => Token.RightParen,
+        "+" => Token.Plus,
+        "-" => Token.Minus,
+        "*" => Token.Star,
+        _ => {
+          return Err(
+            error: LexError.UnexpectedCharacter(
+              character: character,
+              position: index,
+            ),
+          );
+        },
+      };
+      tokens = tokens ++ [single];
+      index = index + 1;
+    }
+  }
+  Ok(value: tokens)
+}
+
+example tokenize_an_expression for tokenize {
+  tokenize(source: "2 * (width + 10)")
+    == Ok(
+      value: [
+        Token.Number(value: 2),
+        Token.Star,
+        Token.LeftParen,
+        Token.Identifier(name: "width"),
+        Token.Plus,
+        Token.Number(value: 10),
+        Token.RightParen,
+      ],
+    )
+}
+
+example tokenize_empty_and_blank_text for tokenize {
+  tokenize(source: "") == Ok(value: [])
+    and tokenize(source: "   ") == Ok(value: [])
+}
+
+example tokenize_reports_the_position_of_a_bad_character for tokenize {
+  tokenize(source: "a + $")
+    == Err(error: LexError.UnexpectedCharacter(character: "$", position: 4))
+}
