@@ -30,7 +30,8 @@ path            = IDENT { "." IDENT } ;
 
 item            = type_decl | record_decl | variant_decl | const_decl | fn_decl
                 | example_decl | property_decl
-                | resource_decl | capability_decl | manifest_decl ;
+                | resource_decl | capability_decl | manifest_decl
+                | interface_decl | impl_decl | unit_decl ;
 
 type_decl       = [ "pub" ] "type" TYPE_IDENT [ type_params ] "=" type_rhs ";" ;
 type_rhs        = "distinct" type
@@ -53,10 +54,12 @@ field_args      = field_arg { "," field_arg } [ "," ] ;
 field_arg       = IDENT ":" expr ;
 
 type_params     = "<" type_param { "," type_param } ">" ;
-type_param      = TYPE_IDENT [ ":" TYPE_IDENT ] | "effect" TYPE_IDENT ;
+type_param      = TYPE_IDENT [ ":" bound ] | "effect" TYPE_IDENT ;
+bound           = bound_path { "+" bound_path } ;
+bound_path      = { IDENT "." } TYPE_IDENT ;
 ```
 
-`type` 宣言の `where` は、`self` で値を参照します。`record` の `where` は、フィールドの名前をそのまま使います（[07 レコードとバリアント](07-records-and-variants.md)）。`type_param` の `TYPE_IDENT : TYPE_IDENT` は境界（`Eq`、`Ord`）です。`type_rhs` の 3 つ目の形（`type` だけ）は型の別名で、文法上は読めますが `E0314` で拒否されます。
+`type` 宣言の `where` は、`self` で値を参照します。`record` の `where` は、フィールドの名前をそのまま使います（[07 レコードとバリアント](07-records-and-variants.md)）。`bound` は `Eq`、`Ord`、またはインターフェースのパスです。複数の境界は `+` でつなぎます（[22 インターフェース](22-interfaces.md)）。`type_rhs` の 3 つ目の形（`type` だけ）は型の別名で、文法上は読めますが `E0314` で拒否されます。
 
 ## 関数、example、property
 
@@ -84,7 +87,7 @@ property_clause = "requires" expr ";" ;
 ## 型
 
 ```text
-type            = fn_type | named_type ;
+type            = fn_type | named_type | quantity_type ;
 named_type      = { IDENT "." } TYPE_IDENT [ "<" type { "," type } ">" ] ;
 fn_type         = "fn" "(" [ fn_type_params ] ")" "->" type [ "uses" effect_list ] ;
 fn_type_params  = param { "," param } [ "," ] ;
@@ -114,7 +117,7 @@ blocklike       = if_expr | match_expr | for_expr | while_expr | using_expr ;
 if_expr         = "if" expr plain_block [ "else" ( if_expr | plain_block ) ] ;
 plain_block     = "{" block_body "}" ;
 match_expr      = "match" expr "{" { arm } "}" ;
-arm             = pattern "=>" ( expr | plain_block ) "," ;
+arm             = or_pattern "=>" ( expr | plain_block ) "," ;
 for_expr        = "for" pattern "in" iterable "{" { loop_clause } block_body "}" ;
 while_expr      = "while" expr "{" { loop_clause } block_body "}" ;
 using_expr      = "using" IDENT "=" expr plain_block ;
@@ -132,7 +135,8 @@ literal_pattern = [ "-" ] INT | STRING | "true" | "false" ;
 ctor_pattern    = ctor_path [ "(" [ pat_fields ] ")" ] ;
 ctor_path       = { IDENT "." } TYPE_IDENT [ "." TYPE_IDENT ] ;
 pat_fields      = pat_field { "," pat_field } [ "," ] ;
-pat_field       = IDENT ":" pattern ;
+pat_field       = IDENT ":" or_pattern ;
+or_pattern      = pattern { "|" pattern } ;
 ```
 
 ## 式
@@ -195,6 +199,28 @@ fn_lit          = "fn" "(" [ param_list ] ")" "->" type [ "uses" effect_list ] f
 | 11（最も弱い） | `forall`、`exists`、ブロックを持つ式 | |
 
 `await` のオペランドの直後に書いた `?` は `await` に付きます。`await e?` は `(await e)?` です（[18 並行処理](18-concurrency.md)）。
+
+## インターフェースと単位
+
+```text
+interface_decl  = [ "pub" ] "interface" TYPE_IDENT "{" { interface_member } "}" ;
+interface_member = method_sig | law_decl ;
+method_sig      = "fn" IDENT "(" [ param_list ] ")" "->" type [ "uses" effect_list ] ";" ;
+law_decl        = "law" IDENT "(" [ param_list ] ")" "{" { "requires" expr ";" } block_body "}" ;
+
+impl_decl       = "impl" [ type_params ] type_path "for" type
+                  ( "derive" ";" | "{" { fn_decl } "}" ) ;
+
+unit_decl       = [ "pub" ] "unit" IDENT ";" ;
+quantity_type   = ( "Int" | "Float64" ) "<" unit_expr ">" ;
+unit_expr       = ( unit_product | "1" ) [ "/" unit_den ] ;
+unit_product    = unit_factor { "*" unit_factor } ;
+unit_den        = unit_factor | "(" unit_product ")" ;
+unit_factor     = { IDENT "." } IDENT [ "^" INT ] ;
+```
+
+- `interface`、`impl`、`law`、`derive` は予約語ではありません。上の規則が期待する場所でだけキーワードとして読まれるので、これらを名前に使っているプログラムは変わりません。`unit` は予約語です。
+- or パターンのすべての選択肢が同じ名前を束縛すること（`E0350`）と、ケースまたはリテラルを宣言順に並べること（`E0351`）、インターフェースが最初の版の規則に従うこと（`E1401`）、単位が正準形で書かれること（`E0362`）は、文法ではなくチェッカーが要求します。`for` の頭は `or_pattern` ではなく `pattern` を 1 つ取ります。[22 インターフェース](22-interfaces.md)と[23 単位](23-units-of-measure.md)を参照してください。
 
 ## 関連
 

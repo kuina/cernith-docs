@@ -2,7 +2,7 @@
 
 ファイル・環境変数・ネットワークの応答を持つ**シミュレート世界**を作り、その中で関数を実行するモジュールです。`import std.sim;` と書き、`sim.with_sim(...)` や `sim.file(...)` のように呼びます。世界の外のファイルやネットワークには、一切触れません。
 
-[fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md) の関数は、ケイパビリティを通して世界に問い合わせます。テストでは、`fs.simulated()` などのテスト用ケイパビリティを使い、問い合わせの相手をシミュレート世界にします。`std.test.with_world`（[test](test.md)）の世界が持つのは、標準入力の行・時計・乱数だけです。ファイル・環境変数・ネットワークも持つ世界が必要なテストでは、`sim.with_sim` を使います。
+[fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md)、[process](process.md) の関数は、ケイパビリティを通して世界に問い合わせます。テストでは、`fs.simulated()` などのテスト用ケイパビリティを使い、問い合わせの相手をシミュレート世界にします。`std.test.with_world`（[test](test.md)）の世界が持つのは、標準入力の行・時計・乱数だけです。ファイル・環境変数・ネットワークも持つ世界が必要なテストでは、`sim.with_sim` を使います。
 
 流れは 3 段階です。
 
@@ -23,6 +23,17 @@ pub record SimOutcome<T> {
 - `value` は、実行した関数の戻り値です。
 - `output` は、実行中に `console.write_line` や `io.write_line` が書いた行です。書いた順に並びます。
 - `snapshot` は、実行が終わったときの世界の状態を表す文字列のリストです。中身の形式に頼らず、後述の `file_content` などの関数で調べます。
+
+実行中に `http.send` で送られたリクエストは、`sim.requests_made` が次のレコードのリストとして返します。`headers` は、送られたとおりのヘッダーの行（`Name: value`）です。
+
+```text
+pub record SentRequest {
+  method: String,
+  url: String,
+  headers: List<String>,
+  body: Bytes,
+}
+```
 
 ## 世界を実行する
 
@@ -63,7 +74,13 @@ pub fn quiet_world() -> test.World
 | `sim.env_var(name, value)` | 環境変数 |
 | `sim.route(url, status, body)` | `http.get` が返す応答（テキスト） |
 | `sim.route_bytes(url, status, body)` | `http.get_bytes` が返す応答（バイト列） |
+| `sim.route_for(method, url, status, headers, body)` | あるメソッドの `http.send` への応答 |
 | `sim.close_fails(path)` | 閉じるのに失敗するファイル |
+| `sim.program(path, arguments, exit_code, stdout, stderr)` | ちょうどこの引数で起動されたときに、終了コードで終わるプログラム |
+| `sim.program_any(path, exit_code, stdout, stderr)` | どんな引数でも同じ応答をするプログラム |
+| `sim.program_signaled(path, arguments, signal)` | シグナルで殺されるプログラム |
+| `sim.program_timed_out(path, arguments, stdout)` | 時間内に終わらないプログラム |
+| `sim.terminal(width)` | 標準出力と標準エラー出力が、その幅の端末になる |
 
 ### sim.file と sim.file_bytes
 
@@ -93,6 +110,20 @@ pub fn route_bytes(url: String, status: Int, body: Bytes) -> String
 
 `http.get` と `http.get_bytes` が、`url`（完全に一致する文字列）に対して、ステータスコード `status` と本文 `body` で応答するようにします。`route` で作った応答を `get_bytes` で、`route_bytes` で作った応答を `get` で受け取ることもできます。ルートがない URL へのリクエストは、`HttpError.Network(detail: "network")` になります（[http](http.md)）。
 
+### sim.route_for
+
+```text
+pub fn route_for(
+  method: String,
+  url: String,
+  status: Int,
+  headers: List<String>,
+  body: Bytes,
+) -> String
+```
+
+`http.send` が、リクエスト `method url` に対して、ステータスコード `status`、ヘッダーの行 `headers`（それぞれ `Name: value` の形）、本文 `body` で応答するようにします。`method` はメソッドを表す語（`"POST"`。`http.method_name` を参照）で、URL は完全に一致する必要があります。`route_for` のない `GET` は、`sim.route` と `sim.route_bytes` の普通のルートにフォールバックします。ほかのメソッドはフォールバックしません。どのルートも答えないリクエストは、`HttpError.Network(detail: "network")` になります。`send` では、どのステータスの応答も `Response` です（[http](http.md)）。
+
 ### sim.close_fails
 
 ```text
@@ -100,6 +131,52 @@ pub fn close_fails(path: String) -> String
 ```
 
 `path` のファイルを閉じる処理が失敗するようにします。`using` の本体が成功していれば、`using` 全体が `Err(error: FsError.CloseFailed(path: ...))` になります（[fs](fs.md)）。ファイルを閉じる失敗は、現実にはめったに起きないので、プログラムがそれを正しく扱うかどうかを確かめるために使います。
+
+### sim.program、sim.program_any、sim.program_signaled、sim.program_timed_out
+
+```text
+pub fn program(
+  path: String,
+  arguments: List<String>,
+  exit_code: Int,
+  stdout: String,
+  stderr: String,
+) -> String
+
+pub fn program_any(
+  path: String,
+  exit_code: Int,
+  stdout: String,
+  stderr: String,
+) -> String
+
+pub fn program_signaled(
+  path: String,
+  arguments: List<String>,
+  signal: String,
+) -> String
+
+pub fn program_timed_out(
+  path: String,
+  arguments: List<String>,
+  stdout: String,
+) -> String
+```
+
+シミュレート世界は、プログラムを実行しません。`process.run`（[process](process.md)）には、これらのスクリプトで答えます。
+
+- `path` は、呼び出しが使う名前ではなく、**グラントが与える**プログラムのパス（`ProgramGrant` の `path`）です。`process.simulated()` のグラントには、`/sim/tool` にプログラム `tool` があります。
+- `program` は、引数がちょうど `arguments` である呼び出しに答えます。プログラムは `Exit.Exited(code: exit_code)` で終わり、`stdout` と `stderr` を出力します。`program_any` は、どんな引数の呼び出しにも答えます。引数が完全に一致するスクリプトのほうが優先されます。
+- `program_signaled` は、出力なしで、プログラムを `Exit.Signaled(name: signal)` で終わらせます。`program_timed_out` は、待たずに、それまでに出力された `stdout` とともに、呼び出しが `Exit.TimedOut` を返すようにします。
+- スクリプトのないプログラムは `ProcessError.NotFound` です。同じプログラムや引数を複数回書いたときは、あとに書いたものが有効です。
+
+### sim.terminal
+
+```text
+pub fn terminal(width: Int) -> String
+```
+
+標準ストリームを、`width` 桁の端末にします。`console.is_terminal` は両方のストリームで `true` を返し、`console.width` は `Some(value: width)` を返します（[console](console.md)）。この項目がなければ、ストリームはパイプで、`is_terminal` は `false`、`width` は `None` です。
 
 ## 実行後の観察
 
@@ -113,6 +190,8 @@ pub fn close_fails(path: String) -> String
 | `sim.open_handles(outcome)` | `Int` | 閉じられなかったファイルの数 |
 | `sim.stdout_chunks(outcome)` | `List<Bytes>` | `console.write_bytes` で書いたバイト列 |
 | `sim.stderr_lines(outcome)` | `List<String>` | `console.write_error_line` で書いた行 |
+| `sim.requests_made(outcome)` | `List<SentRequest>` | `http.send` で送ったリクエスト |
+| `sim.processes_started(outcome)` | `List<List<String>>` | 起動されたコマンド |
 
 ### sim.file_content と sim.file_content_bytes
 
@@ -152,6 +231,17 @@ pub fn stderr_lines<T>(outcome: SimOutcome<T>) -> List<String>
 ```
 
 `stdout_chunks` は、`console.write_bytes` の呼び出しごとに 1 つ、書いたバイト列を呼んだ順に返します。`console.write_line` で書いた行は含まれず、`outcome.output` に入ります。`stderr_lines` は、`console.write_error_line` で書いた行を、呼んだ順に返します（[console](console.md)）。
+
+### sim.requests_made と sim.processes_started
+
+```text
+pub fn requests_made<T>(outcome: SimOutcome<T>) -> List<SentRequest>
+pub fn processes_started<T>(outcome: SimOutcome<T>) -> List<List<String>>
+```
+
+`requests_made` は、実行中に `http.send` で送られたリクエストを、順に返します。`send` が送る前に拒否したリクエスト（`BadRequest`、`Denied`）は含まれません。`get` や `get_bytes` の呼び出しも含まれません。
+
+`processes_started` は、実行中に起動されたコマンドを、順に返します。各コマンドはリストで、プログラムのパス、続いてその引数です。スクリプトのないコマンド（したがって `NotFound` になるもの）も、世界に届いているので記録されます。`process.run` がグラントによって拒否した呼び出し（`Denied`、`ArgumentsDenied`、`BadRequest`）は世界に届かないので、記録されません。
 
 > 補足：`std.sys` は、`fs`、`env`、`http`、`console` の関数が、世界（実際の環境かシミュレート世界）にリクエストを送るためのモジュールです。プログラムが直接使うものではありません。
 
@@ -429,10 +519,160 @@ example stored_picture_size_reads_a_file_set_up_as_bytes for stored_picture_size
 }
 ```
 
+### スクリプト、端末、記録されたリクエスト
+
+次のモジュールは、スクリプトでコマンドに答え、世界を端末にし、`send` が送ったものを読み戻します。
+
+```cernith
+module guide.sim_scripts;
+
+import std.bytes;
+import std.console;
+import std.http;
+import std.process;
+import std.sim;
+
+pub fn announce(
+  access: console.Console,
+) -> Result<Unit, console.ConsoleError> uses io {
+  if console.is_terminal(access: access, stream: console.Stream.Output) {
+    console.write_line(access: access, text: "terminal")
+  } else {
+    console.write_line(access: access, text: "pipe")
+  }
+}
+
+example the_world_is_a_pipe_unless_the_setup_says_otherwise for announce {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [sim.terminal(width: 100)],
+    run: fn() -> Result<Unit, console.ConsoleError> uses clock, io, random {
+      announce(access: console.simulated())
+    },
+  ).output
+    == ["terminal"]
+    and sim.with_sim(
+      world: sim.quiet_world(),
+      setup: [],
+      run: fn() -> Result<Unit, console.ConsoleError> uses clock, io, random {
+        announce(access: console.simulated())
+      },
+    ).output
+      == ["pipe"]
+}
+
+pub fn ping(access: http.Http) -> Result<Int, http.HttpError> uses io {
+  let request = http.new_request(
+    method: http.Method.Put,
+    url: "https://api.example.com/ping",
+  );
+  let response = http.send(access: access, request: request)?;
+  Ok(value: response.status)
+}
+
+example send_is_answered_by_the_route_of_its_method for ping {
+  match sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [
+      sim.route_for(
+        method: "PUT",
+        url: "https://api.example.com/ping",
+        status: 204,
+        headers: [],
+        body: bytes.empty(),
+      ),
+    ],
+    run: fn() -> Result<Int, http.HttpError> uses clock, io, random {
+      ping(access: http.simulated())
+    },
+  ) {
+    outcome => outcome.value == Ok(value: 204)
+      and sim.requests_made(outcome: outcome)
+        == [
+          sim.SentRequest(
+            method: "PUT",
+            url: "https://api.example.com/ping",
+            headers: [],
+            body: bytes.empty(),
+          ),
+        ],
+  }
+}
+
+pub fn version_of_tool(
+  tools: process.Process,
+) -> Result<Int, process.ProcessError> uses io {
+  let output = process.run(
+    access: tools,
+    program: "tool",
+    arguments: ["--version"],
+    options: process.options(seconds: 5),
+  )?;
+  match output.exit {
+    process.Exit.Exited(code: code) => Ok(value: code),
+    _ => Ok(value: -1),
+  }
+}
+
+example a_program_that_ends_otherwise for version_of_tool {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [
+      sim.program_signaled(
+        path: "/sim/tool",
+        arguments: ["--version"],
+        signal: "SIGSEGV",
+      ),
+    ],
+    run: fn() -> Result<Int, process.ProcessError> uses clock, io, random {
+      version_of_tool(tools: process.simulated())
+    },
+  ).value
+    == Ok(value: -1)
+    and sim.with_sim(
+      world: sim.quiet_world(),
+      setup: [
+        sim.program_timed_out(
+          path: "/sim/tool",
+          arguments: ["--version"],
+          stdout: "",
+        ),
+      ],
+      run: fn() -> Result<Int, process.ProcessError> uses clock, io, random {
+        version_of_tool(tools: process.simulated())
+      },
+    ).value
+      == Ok(value: -1)
+}
+
+example a_script_answers_the_exact_command for version_of_tool {
+  match sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [
+      sim.program_any(path: "/sim/tool", exit_code: 2, stdout: "", stderr: ""),
+      sim.program(
+        path: "/sim/tool",
+        arguments: ["--version"],
+        exit_code: 0,
+        stdout: "tool 1.0\n",
+        stderr: "",
+      ),
+    ],
+    run: fn() -> Result<Int, process.ProcessError> uses clock, io, random {
+      version_of_tool(tools: process.simulated())
+    },
+  ) {
+    outcome => outcome.value == Ok(value: 0)
+      and sim.processes_started(outcome: outcome)
+        == [["/sim/tool", "--version"]],
+  }
+}
+```
+
 ## 関連
 
 - [test](test.md)：`with_world`（標準入力・時計・乱数だけの世界）
-- [fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md)：シミュレート世界に問い合わせる関数
+- [fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md)、[process](process.md)：シミュレート世界に問い合わせる関数
 - [io-clock-random](io-clock-random.md)：`World` の `input`、`now_ms`、`seed`
 - [16 テスト](../language/16-testing.md)
 - [17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)

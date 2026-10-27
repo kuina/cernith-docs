@@ -12,10 +12,16 @@ pub capability Console;
 pub variant ConsoleError {
   Failed(reason: String),
 }
+
+pub variant Stream {
+  Output,
+  Error,
+}
 ```
 
 - `Console` は、フィールドを持たないケイパビリティです。許可の中身（grant）はなく、持っていることだけが意味を持ちます。`==` では比較できません。
 - `ConsoleError` は、読み書きに失敗したときのエラーです。`reason` に理由の文字列が入ります。
+- `Stream` は、プログラムが問い合わせられる 2 つの出力ストリームの名前です。`Output`（標準出力）と `Error`（標準エラー出力）です。
 
 ## プログラムの形
 
@@ -65,6 +71,8 @@ pub fn greet() -> Result<Unit, console.ConsoleError> uses io {
 | `console.write_line(access, text)` | `Result<Unit, ConsoleError>` | 標準出力に 1 行書く |
 | `console.write_bytes(access, bytes)` | `Result<Unit, ConsoleError>` | 標準出力にバイト列をそのまま書く |
 | `console.write_error_line(access, text)` | `Result<Unit, ConsoleError>` | 標準エラー出力に 1 行書く |
+| `console.is_terminal(access, stream)` | `Bool` | そのストリームが端末か |
+| `console.width(access, stream)` | `Option<Int>` | 端末の幅（桁数） |
 | `console.describe(error)` | `String` | `ConsoleError` を文字列にする |
 | `console.simulated()` | `Console` | テスト用のケイパビリティ |
 
@@ -142,6 +150,22 @@ pub fn write_error_line(
 ```
 
 `text` を標準エラー出力に 1 行として書きます。プログラムが出す警告やエラーの報告は、結果と分けて、こちらに書きます。テストでは、`output` には入らず、`sim.stderr_lines` で読めます（[sim](sim.md)）。
+
+### console.is_terminal
+
+```text
+pub fn is_terminal(access: Console, stream: Stream) -> Bool uses io
+```
+
+そのストリームが端末、つまり人が見ているものなら `true`、パイプやファイルなら `false` を返します。端末を持たない対象（ページや、ホストのないモジュール）では `false` です。色や進捗の表示を出すかどうかの判断に使います。シミュレート世界の標準ストリームはパイプです。`sim.with_sim` の `setup` に `sim.terminal(width: ...)` があると、両方のストリームが端末になります（[sim](sim.md)）。
+
+### console.width
+
+```text
+pub fn width(access: Console, stream: Stream) -> Option<Int> uses io
+```
+
+そのストリームが、システムが大きさを教えてくれる端末なら、その幅を桁数で `Some(value: 桁数)` として返します。そうでなければ `None` です。シミュレート世界では、`sim.terminal` に渡した幅です。
 
 ### console.describe
 
@@ -362,6 +386,76 @@ example warn_goes_to_the_error_stream for warn {
 ```
 
 `main` の終了ステータスは、`report_total` が成功すれば 0、`ConsoleError` で失敗すれば標準エラー出力にその説明を書いて 1 です。
+
+### 端末についての問い合わせ
+
+幅を選び、色を使うかどうかを決めるモジュールです。シミュレート世界は、`setup` で端末だと指定しない限り、パイプです。
+
+```cernith
+module guide.console_terminal;
+
+import std.console;
+import std.sim;
+
+pub fn columns(access: console.Console) -> Int uses io {
+  match console.width(access: access, stream: console.Stream.Output) {
+    Some(value: width) => width,
+    None => 80,
+  }
+}
+
+example columns_is_the_width_of_a_terminal_or_80 for columns {
+  look(
+    setup: [sim.terminal(width: 120)],
+    body: fn(access: console.Console) -> Int uses io {
+      columns(access: access)
+    },
+  )
+    == 120
+    and look(
+      setup: [],
+      body: fn(access: console.Console) -> Int uses io {
+        columns(access: access)
+      },
+    )
+      == 80
+}
+
+fn look<T>(
+  setup: List<String>,
+  body: fn(access: console.Console) -> T uses io,
+) -> T {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: setup,
+    run: fn() -> T uses clock, io, random {
+      body(access: console.simulated())
+    },
+  ).value
+}
+
+pub fn wants_color(access: console.Console) -> Bool uses io {
+  console.is_terminal(access: access, stream: console.Stream.Output)
+    and not console.is_terminal(access: access, stream: console.Stream.Error)
+}
+
+example color_only_for_a_terminal for wants_color {
+  look(
+    setup: [sim.terminal(width: 80)],
+    body: fn(access: console.Console) -> Bool uses io {
+      console.is_terminal(access: access, stream: console.Stream.Error)
+    },
+  )
+    == true
+    and look(
+      setup: [],
+      body: fn(access: console.Console) -> Bool uses io {
+        wants_color(access: access)
+      },
+    )
+      == false
+}
+```
 
 ## 関連
 

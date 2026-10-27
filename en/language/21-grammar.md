@@ -30,7 +30,8 @@ path            = IDENT { "." IDENT } ;
 
 item            = type_decl | record_decl | variant_decl | const_decl | fn_decl
                 | example_decl | property_decl
-                | resource_decl | capability_decl | manifest_decl ;
+                | resource_decl | capability_decl | manifest_decl
+                | interface_decl | impl_decl | unit_decl ;
 
 type_decl       = [ "pub" ] "type" TYPE_IDENT [ type_params ] "=" type_rhs ";" ;
 type_rhs        = "distinct" type
@@ -53,10 +54,12 @@ field_args      = field_arg { "," field_arg } [ "," ] ;
 field_arg       = IDENT ":" expr ;
 
 type_params     = "<" type_param { "," type_param } ">" ;
-type_param      = TYPE_IDENT [ ":" TYPE_IDENT ] | "effect" TYPE_IDENT ;
+type_param      = TYPE_IDENT [ ":" bound ] | "effect" TYPE_IDENT ;
+bound           = bound_path { "+" bound_path } ;
+bound_path      = { IDENT "." } TYPE_IDENT ;
 ```
 
-The `where` of a `type` declaration refers to the value with `self`; the `where` of a `record` uses the names of its fields as they are ([07 Records and variants](07-records-and-variants.md)). The `TYPE_IDENT : TYPE_IDENT` in `type_param` is a bound (`Eq`, `Ord`). The third form of `type_rhs` (just `type`) is a type alias; it can be read grammatically but is rejected with `E0314`.
+The `where` of a `type` declaration refers to the value with `self`; the `where` of a `record` uses the names of its fields as they are ([07 Records and variants](07-records-and-variants.md)). A `bound` is `Eq`, `Ord`, or the path of an interface; several are joined by `+` ([22 Interfaces](22-interfaces.md)). The third form of `type_rhs` (just `type`) is a type alias; it can be read grammatically but is rejected with `E0314`.
 
 ## Functions, examples, and properties
 
@@ -84,7 +87,7 @@ The names of effects (`io`, `clock`, `random`, `diverge`, `async`) are read as `
 ## Types
 
 ```text
-type            = fn_type | named_type ;
+type            = fn_type | named_type | quantity_type ;
 named_type      = { IDENT "." } TYPE_IDENT [ "<" type { "," type } ">" ] ;
 fn_type         = "fn" "(" [ fn_type_params ] ")" "->" type [ "uses" effect_list ] ;
 fn_type_params  = param { "," param } [ "," ] ;
@@ -114,7 +117,7 @@ blocklike       = if_expr | match_expr | for_expr | while_expr | using_expr ;
 if_expr         = "if" expr plain_block [ "else" ( if_expr | plain_block ) ] ;
 plain_block     = "{" block_body "}" ;
 match_expr      = "match" expr "{" { arm } "}" ;
-arm             = pattern "=>" ( expr | plain_block ) "," ;
+arm             = or_pattern "=>" ( expr | plain_block ) "," ;
 for_expr        = "for" pattern "in" iterable "{" { loop_clause } block_body "}" ;
 while_expr      = "while" expr "{" { loop_clause } block_body "}" ;
 using_expr      = "using" IDENT "=" expr plain_block ;
@@ -132,7 +135,8 @@ literal_pattern = [ "-" ] INT | STRING | "true" | "false" ;
 ctor_pattern    = ctor_path [ "(" [ pat_fields ] ")" ] ;
 ctor_path       = { IDENT "." } TYPE_IDENT [ "." TYPE_IDENT ] ;
 pat_fields      = pat_field { "," pat_field } [ "," ] ;
-pat_field       = IDENT ":" pattern ;
+pat_field       = IDENT ":" or_pattern ;
+or_pattern      = pattern { "|" pattern } ;
 ```
 
 ## Expressions
@@ -195,6 +199,28 @@ From the strongest binding to the weakest.
 | 11 (weakest) | `forall`, `exists`, expressions that have blocks | |
 
 `?` written directly after the operand of `await` belongs to the `await`: `await e?` is `(await e)?` ([18 Concurrency](18-concurrency.md)).
+
+## Interfaces and units of measure
+
+```text
+interface_decl  = [ "pub" ] "interface" TYPE_IDENT "{" { interface_member } "}" ;
+interface_member = method_sig | law_decl ;
+method_sig      = "fn" IDENT "(" [ param_list ] ")" "->" type [ "uses" effect_list ] ";" ;
+law_decl        = "law" IDENT "(" [ param_list ] ")" "{" { "requires" expr ";" } block_body "}" ;
+
+impl_decl       = "impl" [ type_params ] type_path "for" type
+                  ( "derive" ";" | "{" { fn_decl } "}" ) ;
+
+unit_decl       = [ "pub" ] "unit" IDENT ";" ;
+quantity_type   = ( "Int" | "Float64" ) "<" unit_expr ">" ;
+unit_expr       = ( unit_product | "1" ) [ "/" unit_den ] ;
+unit_product    = unit_factor { "*" unit_factor } ;
+unit_den        = unit_factor | "(" unit_product ")" ;
+unit_factor     = { IDENT "." } IDENT [ "^" INT ] ;
+```
+
+- `interface`, `impl`, `law`, and `derive` are not reserved words. Each is read as a keyword only where the rule above expects it, so a program that uses them as names is unchanged. `unit` is reserved.
+- The checker, not the grammar, requires that every alternative of an or-pattern binds the same names (`E0350`) and lists cases or literals in declaration order (`E0351`), that an interface follows the rules of its first version (`E1401`), and that a unit is written in canonical form (`E0362`). The head of a `for` takes one `pattern`, not an `or_pattern`. See [22 Interfaces](22-interfaces.md) and [23 Units of measure](23-units-of-measure.md).
 
 ## Related
 

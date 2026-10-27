@@ -22,6 +22,9 @@
 | [std.result](result.md) | `Result<T, E>` の関数 |
 | [std.bytes](bytes.md) | `Bytes`：バイト列、数値の読み書き、16 進・Base64 |
 | [std.floats と std.ints](floats-ints.md) | `Floats`、`Ints`：数値の配列 |
+| [std.seq](seq.md) | `Seq<T>`：長さの上限を持つ、終わる遅延シーケンス |
+| [std.show](show.md) | インターフェース `Show`：値を、それを作る Cernith のテキストにする |
+| [std.codec](codec.md) | インターフェース `Encode` と `Decode`：値を、フォーマットが読み書くデータの形にする |
 
 ### 並行・並列
 
@@ -34,25 +37,27 @@
 
 | モジュール | 内容 |
 | --- | --- |
-| [std.io、std.clock、std.random](io-clock-random.md) | 標準入出力、時刻、乱数（ケイパビリティを使わない効果） |
-| [std.console](console.md) | 標準入出力（ケイパビリティを使う） |
+| [std.io、std.clock、std.random](io-clock-random.md) | 標準入出力、時刻（単調な時計と実際の待ちを含む）、乱数（安全な乱数のバイト列を含む）。ケイパビリティを使わない効果 |
+| [std.console](console.md) | 標準入出力と、出力が端末かどうか（ケイパビリティを使う） |
 | [std.env](env.md) | 環境変数 |
-| [std.fs](fs.md) | ファイルとフォルダ |
+| [std.fs](fs.md) | ファイルとフォルダ：読む、書く、追記する、置き換える、名前を変える、パスを調べる |
 | [std.path](path.md) | パスの文字列操作 |
-| [std.http](http.md) | HTTP の取得 |
+| [std.http](http.md) | 任意のメソッド、ヘッダー、本文を持つ HTTP リクエスト |
+| [std.process](process.md) | グラントが許すプログラムを実行し、その出力を読む |
 
 ### テスト
 
 | モジュール | 内容 |
 | --- | --- |
 | [std.test](test.md) | シミュレート世界で効果のあるコードを試す |
-| [std.sim](sim.md) | ファイル・環境変数・ネットワークのシミュレート世界 |
+| [std.sim](sim.md) | ファイル・環境変数・ネットワーク・プログラム・端末のシミュレート世界 |
 
 ## 規約
 
 標準ライブラリの関数は、次の規約でそろえてあります。
 
 - **ラベルは役割に従います。** 操作の対象は先頭にあり、`items`、`of`、`option`、`outcome`、`map` などの名前です。関数を渡すパラメータは `apply`、`keep`、`test`、`combine`、`less_than` で、その関数のパラメータの名前は `item`、`total`、`first`、`second`、`value` です。
+- **世界に触れる関数は、ケイパビリティを受け取るか、ambient な効果です。** `std.fs`、`std.console`、`std.env`、`std.http`、`std.process` は、`manifest` から受け取ったケイパビリティ（`access:`）を取り、`uses io` を宣言します。`std.io`、`std.clock`、`std.random` に必要なのは効果だけです（`io`、`clock`、`random`。`clock.sleep_ms` や `random.bytes` のような関数は `io` も宣言します）（[17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)）。
 - **関数を引数に取る関数の多くは、効果について多相**です（`<effect E>`）。純粋な関数を渡せば呼び出しも純粋です（[11 効果](../language/11-effects.md)）。例外は、`list.sort_by`（比較は純粋でなければなりません）、`std.parallel`（関数に効果を許しません）、`test.with_world` と `sim.with_sim`（関数が持てる効果は `clock`、`io`、`random` だけです）です。
 - **全域な操作は `Option` を返し、部分的な操作は事前条件を持ちます。** `first`、`last`、`max`、`min`、`get`、`index_of`、`parse` は、結果がないことがあるので `Option` を返します。`take`、`drop`、`slice`、`range` のように範囲を取る関数は、範囲が正しいことを事前条件にし、違反する呼び出しは欠陥です（[12 エラーと欠陥](../language/12-errors-and-defects.md)）。
 - **位置と長さは、Unicode スカラー値で数えます。** バイトや UTF-16 の単位ではありません。

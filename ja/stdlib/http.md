@@ -1,6 +1,6 @@
 # std.http
 
-HTTP で他のホストから内容を取ってくるモジュールです。`import std.http;` と書き、`http.get(access: ..., url: ...)` のように呼びます。リクエストは GET だけで、呼び出しは応答が返るまで待ちます。
+HTTP で他のホストから内容を取ってくるモジュールです。`import std.http;` と書き、`http.get(access: ..., url: ...)` のように呼びます。`get` と `get_bytes` は GET リクエストを送って本文を返します。`send` は、任意のメソッド、ヘッダー、本文を持つリクエストを送り、ステータスとヘッダーも返します。呼び出しは応答が返るまで待ちます。
 
 HTTP を使うには、ケイパビリティ `Http` が必要です。`Http` は、プログラムの `manifest` 宣言で、**接続してよいホスト名のリスト**を付けて求めます。`main` の第 2 引数として渡されます。ほかの場所では作れません（エラー `E1301`）。`Http` を受け取る関数は、`uses io` も宣言します（[17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)）。
 
@@ -10,7 +10,7 @@ pub manifest Caps {
 }
 ```
 
-実行環境によっては、実際の HTTP リクエストが使えません。その場合の `get` と `get_bytes` は、`Err(error: HttpError.Unsupported)` を返します。
+実行環境によっては、実際の HTTP リクエストが使えません。その場合の `get`、`get_bytes`、`send` は、`Err(error: HttpError.Unsupported)` を返します。実際のリクエストは、インタープリタ、Python、Wasmtime 上の Wasm、Windows のネイティブコードで動きます。JavaScript と Node 上の Wasm は `Unsupported` を返します。
 
 ## 型
 
@@ -24,6 +24,36 @@ pub variant HttpError {
   Status(code: Int),
   Unsupported,
   Denied(host: String),
+  BadRequest(detail: String),
+}
+
+pub record Header {
+  name: String,
+  value: String,
+}
+
+pub variant Method {
+  Get,
+  Head,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Options,
+}
+
+pub record Request {
+  method: Method,
+  url: String,
+  headers: List<Header>,
+  body: Bytes,
+  timeout_ms: Int,
+}
+
+pub record Response {
+  status: Int,
+  headers: List<Header>,
+  body: Bytes,
 }
 ```
 
@@ -36,6 +66,9 @@ pub variant HttpError {
 | `Status(code: ...)` | 応答は得られたが、ステータスコードが 200 から 299 の範囲にない（`code` がそのコード） |
 | `Unsupported` | この実行環境では、実際のリクエストが使えない |
 | `Denied(host: ...)` | URL のホストが、許可されたホストに含まれない。リクエストは送られない |
+| `BadRequest(detail: ...)` | `send` が、送る前にリクエストを拒否した。`detail` は何が悪いかを表す |
+
+`Header`、`Method`、`Request`、`Response` は `send` が使います。`Request` は `method`、`url`、`headers` のリスト、`body`、ミリ秒の制限時間 `timeout_ms` を持ち、`Response` は応答の `status` コード、`headers`、`body` を持ちます。
 
 ```cernith-error E0215
 module guide.http_reads_the_grant;
@@ -63,13 +96,17 @@ pub fn open_access() -> http.Http {
 | --- | --- | --- |
 | `http.get(access, url)` | `Result<String, HttpError>` | `url` の応答の本文をテキストで返す |
 | `http.get_bytes(access, url)` | `Result<Bytes, HttpError>` | 応答の本文をバイト列で返す |
+| `http.send(access, request)` | `Result<Response, HttpError>` | 任意のメソッド、ヘッダー、本文でリクエストを送る。どのステータスでも `Response` になる |
+| `http.new_request(method, url)` | `Request` | ヘッダーも本文もなく、制限時間が 30 秒のリクエスト |
+| `http.header_value(response, name)` | `Option<String>` | その名前の最初のヘッダーの値（大文字と小文字は区別しない） |
+| `http.method_name(method)` | `String` | `"GET"` のような、メソッドを表す語 |
 | `http.allows(access, url)` | `Bool` | `url` のホストが許可されているか |
 | `http.host_of(url)` | `String` | URL のホスト名 |
 | `http.describe(error)` | `String` | `HttpError` を文字列にする |
 | `http.simulated()` | `Http` | テスト用。すべてのホストを許可する |
 | `http.simulated_with(hosts)` | `Http` | テスト用。指定したホストだけを許可する |
 
-`get` と `get_bytes` は、`uses io` が必要です。ほかは純粋です。
+`get`、`get_bytes`、`send` は、`uses io` が必要です。ほかは純粋です。
 
 ## 関数の詳細
 
@@ -95,6 +132,54 @@ pub fn get_bytes(access: Http, url: String) -> Result<Bytes, HttpError> uses io
 ```
 
 `get` と同じ規則で、本文を `Bytes` で返します。画像や圧縮ファイルのように、テキストでない本文には、こちらを使います。
+
+### http.send
+
+```text
+pub fn send(
+  access: Http,
+  request: Request,
+) -> Result<Response, HttpError> uses io
+```
+
+`request` を送り、**ステータスにかかわらず**応答を返します。404 や 500 もエラーではなく `Response` になり、`response.status` をどう扱うかはプログラムが決めます。（`get` は、200 から 299 の範囲にないステータスを `Status` にします。）
+
+1. `request.url` のホストが許可されていなければ、結果は `Err(error: HttpError.Denied(host: ...))` です。
+2. リクエストが正しくなければ、結果は `Err(error: HttpError.BadRequest(detail: ...))` で、何も送られません。次のものは拒否されます。
+   - `http://` か `https://` で始まらないアドレス、または空白や制御文字を含むアドレス
+   - 1 から 300000 の範囲にない `timeout_ms`
+   - 16 MiB を超える本文
+   - `Get` と `Head` のリクエストにある本文
+   - トークンではないヘッダー名（使えるのは英数字と記号 `!#$%&'*+-.^_`|~`）
+   - ホストが自分で設定するヘッダー `Host`、`Content-Length`、`Transfer-Encoding`、`Connection`（名前は大文字と小文字を区別せずに比べます）
+   - 改行を含むヘッダーの値（ヘッダーインジェクションを防ぎます）
+3. それ以外は送られます。応答が得られなければ、結果は `Err(error: HttpError.Network(detail: ...))` です。制限時間を過ぎたときの `detail` は `"timeout"`、証明書の検査に失敗したときは `"certificate"` です（この検査は切れません）。応答の本文が 64 MiB を超えるときも `Network` の失敗です。対象がリクエストを出せないときは、`Err(error: HttpError.Unsupported)` です。
+
+**リダイレクトはたどりません。** 3xx の応答が、`Location` ヘッダー付きでそのまま応答になります。プログラムがもう一度尋ねるので、新しいアドレスも、ほかのアドレスと同じように、許可されたホストに対して検査されます。
+
+### http.new_request
+
+```text
+pub fn new_request(method: Method, url: String) -> Request
+```
+
+ヘッダーがなく、本文が空で、`timeout_ms` が 30000 のリクエストを返します。ほかのリクエストは、`Request` レコードを書き並べて作ります。
+
+### http.header_value
+
+```text
+pub fn header_value(response: Response, name: String) -> Option<String>
+```
+
+応答のヘッダーのうち、名前が `name` である最初のものの値を返します。なければ `None` です。名前は大文字と小文字を区別せずに比べるので、`"content-type"` で `Content-Type` が見つかります。
+
+### http.method_name
+
+```text
+pub fn method_name(method: Method) -> String
+```
+
+メソッドを表す語を返します。`"GET"`、`"HEAD"`、`"POST"`、`"PUT"`、`"PATCH"`、`"DELETE"`、`"OPTIONS"` のいずれかです。
 
 ### http.allows
 
@@ -124,6 +209,7 @@ pub fn describe(error: HttpError) -> String
 | `Status(code: 404)` | `"status 404"` |
 | `Unsupported` | `"unsupported here"` |
 | `Denied(host: "h")` | `"denied: h"` |
+| `BadRequest(detail: "d")` | `"bad request: d"` |
 
 ### http.simulated と http.simulated_with
 
@@ -137,6 +223,8 @@ pub fn simulated_with(hosts: List<String>) -> Http
 どちらも、`example` と `property` の中、および `std.test.with_world` や `std.sim.with_sim` に渡す関数の中でだけ呼べます。ほかの場所で呼ぶとエラー `E1302` です。
 
 テストの世界での応答は、`std.sim.with_sim` の `setup` に書いたルート（`sim.route`、`sim.route_bytes`）から返ります（[sim](sim.md)）。URL が完全に一致するルートがあれば、そのステータスコードと本文で応答します。ルートがない URL は、`Network(detail: "network")` になります。
+
+`send` では、メソッドを名指しする `sim.route_for(method, url, ...)` が応答を決めます。そのようなルートのない `GET` は、普通のルートにフォールバックします。実行中に `send` で送られたリクエストは、`sim.requests_made` で一覧できます（[sim](sim.md)）。
 
 ## 例
 
@@ -388,6 +476,240 @@ example reachable_follows_the_grant for reachable {
       access: http.simulated_with(hosts: []),
       url: "https://a.org",
     )
+}
+```
+
+### リクエストを送る
+
+次のモジュールは、ヘッダーと本文を持つ POST リクエストを送り、応答のヘッダーを読み、`send` の拒否を確かめます。シミュレート世界では、`sim.route_for` が応答を与え、`sim.requests_made` が送られたものを示します。
+
+```cernith
+module guide.http_send;
+
+import std.bytes;
+import std.http;
+import std.option;
+import std.sim;
+
+pub fn ask(
+  access: http.Http,
+  request: http.Request,
+) -> Result<Int, http.HttpError> uses io {
+  let response = http.send(access: access, request: request)?;
+  Ok(value: response.status)
+}
+
+example a_get_falls_back_to_the_plain_routes for ask {
+  simulate(
+    setup: [
+      sim.route(url: "https://api.example.com/", status: 200, body: "hello"),
+    ],
+    body: fn(access: http.Http) -> List<Result<Int, http.HttpError>> uses io {
+      [
+        ask(
+          access: access,
+          request: http.new_request(
+            method: http.Method.Get,
+            url: "https://api.example.com/",
+          ),
+        ),
+        ask(
+          access: access,
+          request: http.new_request(
+            method: http.Method.Delete,
+            url: "https://api.example.com/",
+          ),
+        ),
+      ]
+    },
+  ).value
+    == [Ok(value: 200), Err(error: http.HttpError.Network(detail: "network"))]
+}
+
+example a_request_is_checked_before_it_is_sent for ask {
+  match simulate(
+    setup: [],
+    body: fn(access: http.Http) -> List<Result<Int, http.HttpError>> uses io {
+      let base = http.new_request(
+        method: http.Method.Get,
+        url: "https://api.example.com/",
+      );
+      [
+        ask(access: http.simulated_with(hosts: ["other.org"]), request: base),
+        ask(
+          access: access,
+          request: http.Request(
+            method: http.Method.Get,
+            url: base.url,
+            headers: [],
+            body: bytes.from_text(text: "x"),
+            timeout_ms: 1000,
+          ),
+        ),
+        ask(
+          access: access,
+          request: http.Request(
+            method: http.Method.Get,
+            url: base.url,
+            headers: [http.Header(name: "Host", value: "evil.example")],
+            body: bytes.empty(),
+            timeout_ms: 1000,
+          ),
+        ),
+        ask(
+          access: access,
+          request: http.Request(
+            method: http.Method.Get,
+            url: "ftp://api.example.com/",
+            headers: [],
+            body: bytes.empty(),
+            timeout_ms: 1000,
+          ),
+        ),
+        ask(
+          access: access,
+          request: http.Request(
+            method: http.Method.Get,
+            url: base.url,
+            headers: [],
+            body: bytes.empty(),
+            timeout_ms: 0,
+          ),
+        ),
+      ]
+    },
+  ) {
+    outcome => outcome.value
+      == [
+        Err(error: http.HttpError.Denied(host: "api.example.com")),
+        Err(
+          error: http.HttpError.BadRequest(detail: "GET and HEAD have no body"),
+        ),
+        Err(
+          error: http.HttpError.BadRequest(
+            detail: "the host sets the header Host",
+          ),
+        ),
+        Err(
+          error: http.HttpError.BadRequest(
+            detail: "the address is not http or https",
+          ),
+        ),
+        Err(
+          error: http.HttpError.BadRequest(
+            detail: "timeout_ms is from 1 to 300000",
+          ),
+        ),
+      ]
+      and sim.requests_made(outcome: outcome) == [],
+  }
+}
+
+pub fn create_item(
+  access: http.Http,
+  name: String,
+) -> Result<String, http.HttpError> uses io {
+  let request = http.Request(
+    method: http.Method.Post,
+    url: "https://api.example.com/items",
+    headers: [
+      http.Header(name: "Content-Type", value: "application/json"),
+      http.Header(name: "X-Key", value: "k1"),
+    ],
+    body: bytes.from_text(text: "{\"name\": \"" ++ name ++ "\"}"),
+    timeout_ms: 5000,
+  );
+  let response = http.send(access: access, request: request)?;
+  if response.status == 201 {
+    Ok(
+      value: option.unwrap_or(
+        option: http.header_value(response: response, name: "location"),
+        default: "",
+      ),
+    )
+  } else {
+    Err(error: http.HttpError.Status(code: response.status))
+  }
+}
+
+example create_item_reads_the_location_header for create_item {
+  match simulate(
+    setup: [
+      sim.route_for(
+        method: "POST",
+        url: "https://api.example.com/items",
+        status: 201,
+        headers: ["Location: /items/7"],
+        body: bytes.empty(),
+      ),
+    ],
+    body: fn(access: http.Http) -> Result<String, http.HttpError> uses io {
+      create_item(access: access, name: "pen")
+    },
+  ) {
+    outcome => outcome.value == Ok(value: "/items/7")
+      and sim.requests_made(outcome: outcome)
+        == [
+          sim.SentRequest(
+            method: "POST",
+            url: "https://api.example.com/items",
+            headers: ["Content-Type: application/json", "X-Key: k1"],
+            body: bytes.from_text(text: "{\"name\": \"pen\"}"),
+          ),
+        ],
+  }
+}
+
+example create_item_turns_other_statuses_into_errors for create_item {
+  simulate(
+    setup: [
+      sim.route_for(
+        method: "POST",
+        url: "https://api.example.com/items",
+        status: 409,
+        headers: [],
+        body: bytes.from_text(text: "exists"),
+      ),
+    ],
+    body: fn(access: http.Http) -> Result<String, http.HttpError> uses io {
+      create_item(access: access, name: "pen")
+    },
+  ).value
+    == Err(error: http.HttpError.Status(code: 409))
+    and simulate(
+      setup: [],
+      body: fn(access: http.Http) -> Result<String, http.HttpError> uses io {
+        create_item(access: access, name: "pen")
+      },
+    ).value
+      == Err(error: http.HttpError.Network(detail: "network"))
+}
+
+fn simulate<T>(
+  setup: List<String>,
+  body: fn(access: http.Http) -> T uses io,
+) -> sim.SimOutcome<T> {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: setup,
+    run: fn() -> T uses clock, io, random {
+      body(access: http.simulated())
+    },
+  )
+}
+
+pub fn verb(method: http.Method) -> String {
+  http.method_name(method: method)
+}
+
+example verb_is_the_word_of_http for verb {
+  verb(method: http.Method.Get) == "GET"
+    and verb(method: http.Method.Head) == "HEAD"
+    and verb(method: http.Method.Post) == "POST"
+    and verb(method: http.Method.Put) == "PUT"
+    and verb(method: http.Method.Patch) == "PATCH"
+    and verb(method: http.Method.Delete) == "DELETE"
+    and verb(method: http.Method.Options) == "OPTIONS"
 }
 ```
 

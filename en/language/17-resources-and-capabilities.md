@@ -134,6 +134,18 @@ pub capability Console;
 - An operation on a capability takes the capability as a labeled parameter **and declares `uses io`**. Holding a capability alone does not carry an effect. If a function that calls the operation does not declare `uses io`, it is `E0401` ([11 Effects](11-effects.md)). A function that has no capability parameter cannot touch the resource.
 - `clock` and `random` remain effects that do not use capabilities.
 
+### Capabilities of the standard library
+
+| Capability | Module | Grant written in the `manifest` | Authority |
+| --- | --- | --- | --- |
+| `Console` | [std.console](../stdlib/console.md) | none | Standard input and output |
+| `Fs`, `ReadOnlyFs` | [std.fs](../stdlib/fs.md) | `root`: a folder | Files below the root (read and write, or read only) |
+| `Env` | [std.env](../stdlib/env.md) | none | Reading environment variables |
+| `Http` | [std.http](../stdlib/http.md) | `hosts`: the host names that may be reached (`"*"` is for tests) | HTTP requests to those hosts |
+| `Process` | [std.process](../stdlib/process.md) | `programs` (name, absolute path, and argument rule of each), `work_root`, `environment`, `max_output_bytes`, `max_seconds` | Starting the listed programs and reading what they print |
+
+`Process` is the largest authority in the list, because the program it starts is not checked by Cernith. Its grant is an allow-list: a call names a program, never a path; it can pass only the arguments the rule of that program allows; the child sees only the environment variables the grant lists; and every call has a time limit and an output limit. `cernith audit` prints the whole grant ([std.process](../stdlib/process.md)).
+
 ### manifest
 
 ```text
@@ -145,7 +157,7 @@ pub manifest Caps {
 pub fn main(args: List<String>, caps: Caps) -> Int uses io { ... }
 ```
 
-`manifest name { field: capability type(grant), ... }` is the declaration of all the authority a program needs, and is a record whose fields are capability values. The content of the authority is written in the source. A program has at most one `manifest`, and `main` receives it as its second parameter; otherwise it is `E1303`. If a `manifest` names a capability that the world of the backend being built does not provide, the program cannot be built for that backend, and the error is `E1305` (for example, a browser page has files only in its private area `@opfs`, not in the working directory). The functions of `std.io`, `std.clock`, and `std.random` do not take a capability and can be called by declaring `uses io` (`clock`, `random`). This is the same whether `main` has the form `main(args)` (which does not use a `manifest`) or the form that uses a `manifest`.
+`manifest name { field: capability type(grant), ... }` is the declaration of all the authority a program needs, and is a record whose fields are capability values. The content of the authority is written in the source. A program has at most one `manifest`, and `main` receives it as its second parameter; otherwise it is `E1303`. If a `manifest` names a capability that the world of the backend being built does not provide, the program cannot be built for that backend, and the error is `E1305` (for example, a browser page has files only in its private area `@opfs`, not in the working directory, and does not provide `Process`). The functions of `std.io`, `std.clock`, and `std.random` do not take a capability and can be called by declaring `uses io` (`clock`, `random`). This is the same whether `main` has the form `main(args)` (which does not use a `manifest`) or the form that uses a `manifest`.
 
 ```cernith
 module guide.report;
@@ -199,7 +211,7 @@ The `audit` command of the implementation lists the `manifest` together with all
 
 ### Authority in tests
 
-In tests, capabilities can be created by functions such as `fs.simulated()`, `fs.simulated_read_only()`, and `console.simulated()`. These work against the simulated world, and can be called only inside the body of an `example` and a `property`, and inside the `run:` lambda passed to `std.sim.with_sim` and `std.test.with_world`. Calling them anywhere else (for example, inside an ordinary helper function) is `E1302`. Pass capabilities to helper functions as arguments. To use a `manifest` record in a test, assemble it field by field, as in `Caps(files: fs.simulated(), console: console.simulated())` ([std.sim](../stdlib/sim.md)).
+In tests, capabilities can be created by functions such as `fs.simulated()`, `fs.simulated_read_only()`, `console.simulated()`, and `process.simulated_with(...)`. These work against the simulated world, and can be called only inside the body of an `example` and a `property`, and inside the `run:` lambda passed to `std.sim.with_sim` and `std.test.with_world`. Calling them anywhere else (for example, inside an ordinary helper function) is `E1302`. Pass capabilities to helper functions as arguments. To use a `manifest` record in a test, assemble it field by field, as in `Caps(files: fs.simulated(), console: console.simulated())` ([std.sim](../stdlib/sim.md)).
 
 ```cernith-error E1302
 module guide.report;
@@ -213,7 +225,7 @@ pub fn make() -> fs.ReadOnlyFs {
 
 ### Obligations of the library
 
-A standard library function that touches an outside resource has a specification, an `example`, and a counterpart in the simulated world. A function that obtains a resource returns `Result<resource, E>`, where `E` is a closed variant. Files and the console (`std.fs`, `std.console`, `std.env`, `std.http`, `std.path`) are built on this mechanism. `Fs` and `ReadOnlyFs` have a root directory, and every path is normalized so that it cannot leave the root. A path that leaves the root is `Denied`. The functions that the standard library uses internally (`std.sys.request`, `std.async.erase`, `std.async.reveal`, and others) can touch resources without a capability or change the type of a value, so a program that calls them gets `E1306`. Use the functions of `std.fs`, `std.env`, `std.http`, `std.console`, and the other modules that take a capability.
+A standard library function that touches an outside resource has a specification, an `example`, and a counterpart in the simulated world. A function that obtains a resource returns `Result<resource, E>`, where `E` is a closed variant. Files, the console, environment variables, the network, and other programs (`std.fs`, `std.console`, `std.env`, `std.http`, `std.process`, and `std.path` for paths) are built on this mechanism. `Fs` and `ReadOnlyFs` have a root directory, and every path is normalized so that it cannot leave the root. A path that leaves the root is `Denied`. The functions that the standard library uses internally (`std.sys.request`, `std.async.erase`, `std.async.reveal`, and others) can touch resources without a capability or change the type of a value, so a program that calls them gets `E1306`. Use the functions of `std.fs`, `std.env`, `std.http`, `std.console`, `std.process`, and the other modules that take a capability.
 
 ## Diagnostic codes
 
@@ -235,4 +247,4 @@ A standard library function that touches an outside resource has a specification
 
 - Effects: [11 Effects](11-effects.md)
 - Concurrency (tasks and resources): [18 Concurrency](18-concurrency.md)
-- Standard library: [std.fs](../stdlib/fs.md), [std.console](../stdlib/console.md), [std.sim](../stdlib/sim.md)
+- Standard library: [std.fs](../stdlib/fs.md), [std.console](../stdlib/console.md), [std.http](../stdlib/http.md), [std.process](../stdlib/process.md), [std.sim](../stdlib/sim.md)

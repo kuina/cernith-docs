@@ -13,7 +13,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 - `cernith explain code` shows an explanation of the code, how to fix it, and an example.
 - Diagnostics that arise in a chain from the same cause are suppressed, and only one is reported per cause.
 
-In the code numbers, the hundreds digit roughly indicates the area: `E01xx` formatting, `E02xx` names and modules (including the test codes `E0222` and `E0223`), `E03xx` types, `E04xx` effects, `E05xx` contracts and proof obligations (including the termination code `E0509`), `E06xx` termination, `E07xx` unfinished code, `E11xx` resources, `E12xx` concurrency, and `E13xx` capabilities. Warnings (`W`) are numbered the same way: `W0102` (formatting), `W0504` and `W0801` (contracts and proof obligations), `W0701` (unfinished code), and `W1203` (concurrency).
+In the code numbers, the hundreds digit roughly indicates the area: `E01xx` formatting, `E02xx` names and modules (including the test codes `E0222` and `E0223`), `E03xx` types, `E04xx` effects, `E05xx` contracts and proof obligations (including the termination code `E0509`), `E06xx` termination, `E07xx` unfinished code, `E11xx` resources, `E12xx` concurrency, and `E13xx` capabilities, and `E14xx` interfaces and sequences. Warnings (`W`) are numbered the same way: `W0102` (formatting), `W0504` and `W0801` (contracts and proof obligations), `W0701` (unfinished code), and `W1203` (concurrency).
 
 ## Lexical structure, syntax, and formatting
 
@@ -44,7 +44,7 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | `E0210` | import-cycle | Modules import each other (a cycle) | [14](14-modules-and-packages.md) |
 | `E0211` | constant-cycle | A constant depends on itself | [14](14-modules-and-packages.md) |
 | `E0215` | abstract-type | A `distinct` type was constructed or unwrapped outside the module that defines it | [08](08-refined-and-distinct-types.md) |
-| `E0216` | private-in-public | A public signature, field, or contract contains a private type or name | [14](14-modules-and-packages.md) |
+| `E0216` | private-in-public | A public signature, field, or contract contains a private type or name | [14](14-modules-and-packages.md), [23](23-units-of-measure.md) |
 | `E0218` | module-path-mismatch | The module name does not match the file path | [14](14-modules-and-packages.md) |
 | `E0219` | reserved-module-name | A module name under `std` was used | [14](14-modules-and-packages.md) |
 | `E0224` | invalid-manifest | The package’s `cernith.toml` cannot be used | [14](14-modules-and-packages.md) |
@@ -59,7 +59,7 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | Code | Name | Meaning | Chapter |
 | --- | --- | --- | --- |
 | `E0212` | bad-foreign-declaration | A `foreign` line names an unknown backend, is duplicated, or names an invalid symbol | [15](15-foreign-functions.md) |
-| `E0213` | foreign-type-not-supported | A type that cannot cross the foreign boundary | [15](15-foreign-functions.md) |
+| `E0213` | foreign-type-not-supported | A type that cannot cross the foreign boundary | [15](15-foreign-functions.md), [23](23-units-of-measure.md) |
 | `E0220` | missing-foreign-target | A foreign function has no implementation for the backend being built | [15](15-foreign-functions.md) |
 
 ## Testing
@@ -74,7 +74,7 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | Code | Name | Meaning | Chapter |
 | --- | --- | --- | --- |
 | `E0301` | type-mismatch | A value of a type other than the expected type (`E0303` when a `distinct` type is involved) | [03](03-types.md) |
-| `E0302` | implicit-conversion | `Int` and `Float64` were mixed | [03](03-types.md) |
+| `E0302` | implicit-conversion | `Int` and `Float64` were mixed | [03](03-types.md), [23](23-units-of-measure.md) |
 | `E0303` | incompatible-identities | A `distinct` type was used in place of another type (or the reverse) | [08](08-refined-and-distinct-types.md) |
 | `E0304` | missing-argument-label | An argument of a call has no label | [04](04-expressions.md) |
 | `E0305` | non-exhaustive-match | A `match` does not cover all cases | [07](07-records-and-variants.md) |
@@ -87,16 +87,21 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | `E0313` | misplaced-spec-keyword | `result` or `self` was used outside the clauses where it is allowed | [09](09-contracts.md) |
 | `E0314` | type-alias | A type alias was declared | [03](03-types.md) |
 | `E0315` | wrong-type-arguments | The number of type arguments is wrong | [06](06-functions.md) |
-| `E0316` | bound-not-satisfied | A type that must satisfy `Eq` or `Ord` does not | [06](06-functions.md) |
+| `E0316` | bound-not-satisfied | A type that must satisfy `Eq`, `Ord`, or an interface does not | [06](06-functions.md), [22](22-interfaces.md), [08](08-refined-and-distinct-types.md) |
 | `E0317` | no-such-field | A field that does not exist (including `.value` on a refined type) | [07](07-records-and-variants.md) |
-| `E0318` | unknown-bound | A bound other than `Eq` and `Ord` | [06](06-functions.md) |
+| `E0318` | unknown-bound | A bound that is neither `Eq`, `Ord`, nor an interface in scope | [06](06-functions.md), [22](22-interfaces.md) |
 | `E0319` | not-a-value | A type or module was used as a value | [04](04-expressions.md) |
-| `E0320` | cannot-infer | Neither the arguments nor the context determine the type | [06](06-functions.md) |
+| `E0320` | cannot-infer | Neither the arguments nor the context determine the type | [06](06-functions.md), [08](08-refined-and-distinct-types.md) |
 | `E0321` | assign-to-non-var | An assignment to a `let` or a parameter | [05](05-statements.md) |
 | `E0322` | closure-captures-var | A function expression used a `var` of the surrounding function | [05](05-statements.md) |
 | `E0323` | let-has-type | A type annotation was written on a `let` | [05](05-statements.md) |
 | `E0331` | spec-function-in-code | A `spec fn` or property was called from executable code | [09](09-contracts.md) |
 | `E0332` | spec-construct-in-code | A quantifier or lambda inside a specification, or a quantifier inside code | [09](09-contracts.md) |
+| `E0350` | or-pattern-bindings-differ | The alternatives of an or-pattern do not bind the same names | [07](07-records-and-variants.md) |
+| `E0351` | or-pattern-alternatives | An alternative of an or-pattern is `_` or a name, is repeated, or is out of declaration order | [07](07-records-and-variants.md) |
+| `E0360` | unit-mismatch | A number with one unit (or none) where another unit is expected | [23](23-units-of-measure.md) |
+| `E0361` | unit-constructor-argument | A unit constructor was applied to something that is not an `Int` or a `Float64` | [23](23-units-of-measure.md) |
+| `E0362` | unit-not-canonical | The unit of a quantity type is not written in its canonical form | [23](23-units-of-measure.md) |
 
 ## Effects
 
@@ -166,6 +171,17 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | `E1206` | await-of-nothing | `await` was written in front of something that cannot suspend | [18](18-concurrency.md) |
 | `E1207` | await-in-using | The body of `using` contains a suspension point | [18](18-concurrency.md) |
 | `W1203` | wait-cannot-complete | Receives from a channel but never sends | [18](18-concurrency.md) |
+
+## Interfaces and sequences
+
+| Code | Name | Meaning | Chapter |
+| --- | --- | --- | --- |
+| `E1401` | invalid-interface | An interface declaration breaks a rule (a method without `Self`, a method with type parameters, type parameters on the interface) | [22](22-interfaces.md) |
+| `E1402` | incoherent-impl | An `impl` breaks the rule of one instance for each interface and type constructor | [22](22-interfaces.md) |
+| `E1403` | impl-does-not-match | An `impl` does not match its interface | [22](22-interfaces.md) |
+| `E1404` | cannot-derive | An `impl` asks for `derive` and the compiler cannot derive it | [22](22-interfaces.md) |
+| `E1405` | interface-is-not-a-type | An interface was written where a type is expected | [22](22-interfaces.md) |
+| `E1406` | loop-over-seq-clause | A `for` loop over a `Seq` has an `invariant` or `decreases` clause | [05](05-statements.md) |
 
 ## Related
 

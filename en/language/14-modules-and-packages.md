@@ -44,6 +44,8 @@ A declaration belongs only to its own module unless it is marked `pub`. There ar
 | Variant | All cases can be used and matched with `match` | Inside the module only |
 | Refined type | Open. `T(value: n)` and `T.check(value: n)` can be used, and the condition acts as a guard. A value can be used as its base type | Inside the module only |
 | `distinct` type | **Abstract**. The type name can be used, but neither `T(value: ...)` nor `.value` can be used outside (`E0215`) | Inside the module only |
+| Interface | The name can be used as a bound in other modules, and its methods can be called from them ([22 Interfaces](22-interfaces.md)) | Inside the module only |
+| `impl` | Cannot be marked `pub`. It is visible wherever its interface and its type are | |
 | `example`, `property` | Not public | |
 
 Using something that is not `pub` from another module is `E0208` (not-exported).
@@ -166,7 +168,7 @@ pub fn main(args: List<String>) -> Int {
 
 ## Interfaces and fingerprints
 
-The **interface** of a module is its public declarations without their bodies. For a function it is the signature and contract (for a `pub spec fn`, the body as well); for a record, variant, or refined type it is the entire declaration; for a `distinct` type it is the existence only; and for a constant it is the name and type. The **fingerprint** of a module is a hash of its interface and the fingerprints of the modules it imports.
+The **interface** of a module is its public declarations without their bodies. (This is a different thing from an `interface` declaration, which is a bound; see [22 Interfaces](22-interfaces.md).) For a function it is the signature and contract (for a `pub spec fn`, the body as well); for a record, variant, or refined type it is the entire declaration; for a `distinct` type it is the existence only; and for a constant it is the name and type. The **fingerprint** of a module is a hash of its interface and the fingerprints of the modules it imports.
 
 - Changing a function body, a private declaration, an `example`, or the inside of a `distinct` type does not change the fingerprint.
 - Changing a public signature, a contract, a record or variant, or the condition of a refined type changes the fingerprint of that module and of every module that imports it (transitively).

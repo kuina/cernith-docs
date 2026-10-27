@@ -196,6 +196,130 @@ Every example, and each case of a property, runs under an execution budget (the 
 
 While a test runs, every contract clause is checked, including the clauses in the functions that are called. A violation stops the test on a defect (for a precondition, the caller is blamed; for a postcondition, the callee). Clauses that cannot be executed (quantifiers that range over a whole type) are skipped rather than counted as failures. A clause that was executed and held in all tests but has not been proved has the status `tested-only` ([10 Proof obligations and assurance levels](10-verification.md)).
 
+## Running some tests, and what the tests miss
+
+`cernith test --only TEXT` runs only the tests whose name, target function, or `module.name` contains `TEXT` (case-sensitive). To run the tests of one function, give its name. If no test matches, the command says so on standard error and exits with `2`, so that a misspelt name is not mistaken for “all passed”.
+
+`--coverage` and `--mutate` show what the tests leave out. The module below has a function that no test calls and an `if` whose last branch no example takes.
+
+```cernith
+module guide.coverage;
+
+pub fn double(value: Int) -> Int {
+  value * 2
+}
+
+example double_of_three for double {
+  double(value: 3) == 6
+}
+
+pub fn sign(value: Int) -> Int {
+  if value > 0 {
+    1
+  } else if value < 0 {
+    -1
+  } else {
+    0
+  }
+}
+
+example sign_of_negative for sign {
+  sign(value: -5) == -1
+}
+
+example sign_of_positive for sign {
+  sign(value: 5) == 1
+}
+
+pub fn unused(value: Int) -> Int {
+  value + 1
+}
+```
+
+`--coverage` adds a summary and the places that no test reached: functions that were not called, the branches of `if`, the arms of `match`, and the contract clauses that were not evaluated. Saved as `coverage.cnth`:
+
+```text
+$ cernith test --coverage coverage.cnth
+passed   example  guide.coverage.double_of_three
+passed   example  guide.coverage.sign_of_negative
+passed   example  guide.coverage.sign_of_positive
+3 tests: 3 passed
+functions    2/3 (66.7%)
+if branches  3/4 (75.0%)
+match arms   0/0
+clauses      0/0
+  coverage.cnth:14:10 if-branch sign: the `else` branch of `if value < 0` never ran
+  coverage.cnth:29:1 function unused: no test calls it
+```
+
+`--mutate` runs the tests, and if they pass, applies small changes (mutants) to the code under test one at a time, running again only the tests that reach the changed place. A mutant that makes some test fail is *killed*. One that no test notices *survived*, which points to a missing example (here, `sign(value: 0)`).
+
+```text
+$ cernith test --mutate coverage.cnth
+passed   example  guide.coverage.double_of_three
+passed   example  guide.coverage.sign_of_negative
+passed   example  guide.coverage.sign_of_positive
+3 tests: 3 passed
+mutants 9 of 12 run: 5 killed, 4 survived, 3 unreached, score 55.6%
+  SURVIVED coverage.cnth:12:6 sign: `>` becomes `>=` in `value > 0`
+  SURVIVED coverage.cnth:12:14 sign: the constant 0 becomes 1
+  SURVIVED coverage.cnth:14:13 sign: `<` becomes `<=` in `value < 0`
+  SURVIVED coverage.cnth:14:21 sign: the constant 0 becomes 1
+```
+
+- The changes are: exchange of comparisons (`==` and `!=`; `<` and `<=`; `>` and `>=`), exchange of arithmetic (`+` and `-`, `*` to `+`), an integer constant plus one, a swap of the two branches of an `if`, a swap of two neighbouring `match` arms, and removing one `requires`, `ensures`, or loop `invariant`.
+- A mutant is *unreached* when no test runs the changed place. The score is `killed / (killed + survived)`.
+- A survivor is evidence of a missing example, not proof: a change that does not alter the meaning (such as `x + 0`) survives forever. Mutants are chosen evenly and the run is repeatable. `--mutants N` limits the number run (default 200), `--mutation-cases N` sets the cases per property (default 20), and `--min-score PERCENT` makes the exit status `1` below that score.
+- With `--json`, the document has the key `coverage` (`cernith-coverage/0.1`) or `mutation` (`cernith-mutation/0.1`).
+
+## Laws of interfaces
+
+A `law` of an interface is run as a test for every `impl` of that interface that has no type parameters ([22 Interfaces](22-interfaces.md)). The test runner instantiates the law at the type of the `impl` and runs it on generated values, like a `property`. It is named `law_<Interface>_<law>_for_<Type>`, so `--only` can select it. A failing case names the law and the `impl` and shows the counterexample. In the following module, the law `not_negative` holds for `Square` (whose fields are restricted by `where`) and does not hold for `Strip` (whose fields are not).
+
+```cernith-snippet
+module guide.testing_laws;
+
+pub interface Area {
+  fn area(shape: Self) -> Int;
+
+  law not_negative(shape: Self) {
+    area(shape: shape) >= 0
+  }
+}
+
+pub record Square {
+  side: Int,
+} where side >= 0;
+
+pub record Strip {
+  length: Int,
+  width: Int,
+}
+
+impl Area for Square {
+  fn area(shape: Square) -> Int {
+    shape.side * shape.side
+  }
+}
+
+impl Area for Strip {
+  fn area(shape: Strip) -> Int {
+    shape.length * shape.width
+  }
+}
+```
+
+The tests are the following (saved as `area.cnth`).
+
+```text
+$ cernith test --only law_ area.cnth
+passed   property guide.testing_laws.law_Area_not_negative_for_Square
+failed   property guide.testing_laws.law_Area_not_negative_for_Strip  counterexample: shape: Strip(length: -1, width: 1)
+2 tests: 1 passed, 1 failed
+```
+
+The verifier is not asked to prove a law; a law that is false of an `impl` is a defect of the `impl`.
+
 ## Results and exit status
 
 `cernith test` prints one line per test. With `--json`, the output is `cernith-test-results` JSON.
@@ -220,9 +344,12 @@ error    example  guide.c.never_ends  resource-exhausted:
 | `--seed N` | Global seed (default 0) |
 | `--cases N` | Number of passing cases for a property (default 100) |
 | `--budget N` | Number of steps for each example and each property case |
+| `--only TEXT` | Run only the tests whose name, target function, or `module.name` contains `TEXT` |
+| `--coverage` | Also report the functions, branches, arms, and contract clauses that no test reached |
+| `--mutate` | Also apply small changes to the code under test and list the ones that no test notices |
 | `--json` | Output as JSON |
 
-The exit status is `0` if everything passes, `1` if there is a failure or `gave-up`, and `2` if the program does not pass the type check or there is an `error` test. Tests are run only for a program that passes the check without errors.
+The exit status is `0` if everything passes, `1` if there is a failure or `gave-up`, and `2` if the program does not pass the type check, there is an `error` test, or `--only` matches no test. Tests are run only for a program that passes the check without errors.
 
 ## Diagnostic codes
 

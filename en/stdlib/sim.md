@@ -2,7 +2,7 @@
 
 A module that creates a **simulated world** holding files, environment variables, and network responses, and runs a function inside it. Write `import std.sim;` and call functions such as `sim.with_sim(...)` and `sim.file(...)`. It never touches files or networks outside the world.
 
-The functions of [fs](fs.md), [env](env.md), [http](http.md), and [console](console.md) query the world through a capability. In tests, use a test capability such as `fs.simulated()` to make the simulated world the party that answers those queries. The world of `std.test.with_world` ([test](test.md)) holds only the lines of standard input, the clock, and randomness. For a test that needs a world with files, environment variables, and a network as well, use `sim.with_sim`.
+The functions of [fs](fs.md), [env](env.md), [http](http.md), [console](console.md), and [process](process.md) query the world through a capability. In tests, use a test capability such as `fs.simulated()` to make the simulated world the party that answers those queries. The world of `std.test.with_world` ([test](test.md)) holds only the lines of standard input, the clock, and randomness. For a test that needs a world with files, environment variables, and a network as well, use `sim.with_sim`.
 
 The flow has three steps.
 
@@ -23,6 +23,17 @@ pub record SimOutcome<T> {
 - `value` is the return value of the function that was run.
 - `output` holds the lines written by `console.write_line` and `io.write_line` during the run, in the order they were written.
 - `snapshot` is a list of strings representing the state of the world when the run ended. Do not rely on its internal format; examine it with functions such as `file_content`, described below.
+
+The requests that a run sent with `http.send` are returned by `sim.requests_made` as a list of the following record. `headers` holds the header lines as they were sent (`Name: value`).
+
+```text
+pub record SentRequest {
+  method: String,
+  url: String,
+  headers: List<String>,
+  body: Bytes,
+}
+```
 
 ## Running a world
 
@@ -63,7 +74,13 @@ Build the items listed in `setup` with the following functions. When several ite
 | `sim.env_var(name, value)` | An environment variable |
 | `sim.route(url, status, body)` | A response (text) returned by `http.get` |
 | `sim.route_bytes(url, status, body)` | A response (bytes) returned by `http.get_bytes` |
+| `sim.route_for(method, url, status, headers, body)` | A response to `http.send` for one method |
 | `sim.close_fails(path)` | A file whose closing fails |
+| `sim.program(path, arguments, exit_code, stdout, stderr)` | A program that ends with an exit code when it is started with exactly these arguments |
+| `sim.program_any(path, exit_code, stdout, stderr)` | The same for any arguments |
+| `sim.program_signaled(path, arguments, signal)` | A program that is killed by a signal |
+| `sim.program_timed_out(path, arguments, stdout)` | A program that does not end in time |
+| `sim.terminal(width)` | Standard output and standard error are a terminal of that width |
 
 ### sim.file and sim.file_bytes
 
@@ -93,6 +110,20 @@ pub fn route_bytes(url: String, status: Int, body: Bytes) -> String
 
 Makes `http.get` and `http.get_bytes` respond to `url` (an exactly matching string) with the status code `status` and the body `body`. A response created with `route` can also be received with `get_bytes`, and a response created with `route_bytes` can also be received with `get`. A request to a URL that has no route results in `HttpError.Network(detail: "network")` ([http](http.md)).
 
+### sim.route_for
+
+```text
+pub fn route_for(
+  method: String,
+  url: String,
+  status: Int,
+  headers: List<String>,
+  body: Bytes,
+) -> String
+```
+
+Makes `http.send` respond to the request `method url` with the status code `status`, the header lines `headers` (each of the form `Name: value`), and the body `body`. `method` is the word of the method (`"POST"`; see `http.method_name`), and the URL must match exactly. A `GET` for which there is no `route_for` falls back to the plain routes of `sim.route` and `sim.route_bytes`; the other methods do not. A request that no route answers results in `HttpError.Network(detail: "network")`. A response of any status is a `Response` for `send` ([http](http.md)).
+
 ### sim.close_fails
 
 ```text
@@ -100,6 +131,52 @@ pub fn close_fails(path: String) -> String
 ```
 
 Makes the closing of the file at `path` fail. If the body of the `using` succeeded, the whole `using` becomes `Err(error: FsError.CloseFailed(path: ...))` ([fs](fs.md)). A failure to close a file rarely happens in reality, so use this to check whether a program handles it correctly.
+
+### sim.program, sim.program_any, sim.program_signaled, and sim.program_timed_out
+
+```text
+pub fn program(
+  path: String,
+  arguments: List<String>,
+  exit_code: Int,
+  stdout: String,
+  stderr: String,
+) -> String
+
+pub fn program_any(
+  path: String,
+  exit_code: Int,
+  stdout: String,
+  stderr: String,
+) -> String
+
+pub fn program_signaled(
+  path: String,
+  arguments: List<String>,
+  signal: String,
+) -> String
+
+pub fn program_timed_out(
+  path: String,
+  arguments: List<String>,
+  stdout: String,
+) -> String
+```
+
+The simulated world runs no program. It answers `process.run` ([process](process.md)) from these scripts.
+
+- `path` is the path of the program **as the grant gives it** (the `path` of the `ProgramGrant`), not the name that a call uses. The grant of `process.simulated()` has the program `tool` at `/sim/tool`.
+- `program` answers the call whose arguments are exactly `arguments`: the program ends with `Exit.Exited(code: exit_code)` and prints `stdout` and `stderr`. `program_any` answers a call with any arguments; a script for exact arguments wins over it.
+- `program_signaled` ends the program with `Exit.Signaled(name: signal)`, with no output. `program_timed_out` makes the call return `Exit.TimedOut` with the output `stdout` that was printed so far, without waiting.
+- A program with no script is `ProcessError.NotFound`. When the same program or arguments are written more than once, the later one takes effect.
+
+### sim.terminal
+
+```text
+pub fn terminal(width: Int) -> String
+```
+
+Makes the standard streams a terminal of `width` columns: `console.is_terminal` says `true` for both streams and `console.width` gives `Some(value: width)` ([console](console.md)). Without this item the streams are pipes: `is_terminal` is `false` and `width` is `None`.
 
 ## Observing after the run
 
@@ -113,6 +190,8 @@ Examine the world after the run with the following functions. All of them are pu
 | `sim.open_handles(outcome)` | `Int` | The number of files that were not closed |
 | `sim.stdout_chunks(outcome)` | `List<Bytes>` | The bytes written by `console.write_bytes` |
 | `sim.stderr_lines(outcome)` | `List<String>` | The lines written by `console.write_error_line` |
+| `sim.requests_made(outcome)` | `List<SentRequest>` | The requests sent with `http.send` |
+| `sim.processes_started(outcome)` | `List<List<String>>` | The commands that were started |
 
 ### sim.file_content and sim.file_content_bytes
 
@@ -152,6 +231,17 @@ pub fn stderr_lines<T>(outcome: SimOutcome<T>) -> List<String>
 ```
 
 `stdout_chunks` returns the bytes written, one entry per call of `console.write_bytes`, in the order of the calls. Lines written with `console.write_line` are not included; they go into `outcome.output`. `stderr_lines` returns the lines written by `console.write_error_line`, in the order of the calls ([console](console.md)).
+
+### sim.requests_made and sim.processes_started
+
+```text
+pub fn requests_made<T>(outcome: SimOutcome<T>) -> List<SentRequest>
+pub fn processes_started<T>(outcome: SimOutcome<T>) -> List<List<String>>
+```
+
+`requests_made` returns the requests that the run sent with `http.send`, in order. A request that `send` refused before sending (`BadRequest`, `Denied`) is not in the list, and neither is a call of `get` or `get_bytes`.
+
+`processes_started` returns the commands that the run started, in order. Each command is a list: the path of the program, then its arguments. A command that has no script (and so is `NotFound`) is recorded too, since it reached the world. A call that `process.run` refused by the grant (`Denied`, `ArgumentsDenied`, `BadRequest`) never reaches the world and is not recorded.
 
 > Note: `std.sys` is the module through which the functions of `fs`, `env`, `http`, and `console` send requests to the world (the real environment or the simulated world). Programs do not use it directly.
 
@@ -429,10 +519,160 @@ example stored_picture_size_reads_a_file_set_up_as_bytes for stored_picture_size
 }
 ```
 
+### Scripts, terminals, and recorded requests
+
+The following module answers a command from a script, makes the world a terminal, and reads back what `send` sent.
+
+```cernith
+module guide.sim_scripts;
+
+import std.bytes;
+import std.console;
+import std.http;
+import std.process;
+import std.sim;
+
+pub fn announce(
+  access: console.Console,
+) -> Result<Unit, console.ConsoleError> uses io {
+  if console.is_terminal(access: access, stream: console.Stream.Output) {
+    console.write_line(access: access, text: "terminal")
+  } else {
+    console.write_line(access: access, text: "pipe")
+  }
+}
+
+example the_world_is_a_pipe_unless_the_setup_says_otherwise for announce {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [sim.terminal(width: 100)],
+    run: fn() -> Result<Unit, console.ConsoleError> uses clock, io, random {
+      announce(access: console.simulated())
+    },
+  ).output
+    == ["terminal"]
+    and sim.with_sim(
+      world: sim.quiet_world(),
+      setup: [],
+      run: fn() -> Result<Unit, console.ConsoleError> uses clock, io, random {
+        announce(access: console.simulated())
+      },
+    ).output
+      == ["pipe"]
+}
+
+pub fn ping(access: http.Http) -> Result<Int, http.HttpError> uses io {
+  let request = http.new_request(
+    method: http.Method.Put,
+    url: "https://api.example.com/ping",
+  );
+  let response = http.send(access: access, request: request)?;
+  Ok(value: response.status)
+}
+
+example send_is_answered_by_the_route_of_its_method for ping {
+  match sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [
+      sim.route_for(
+        method: "PUT",
+        url: "https://api.example.com/ping",
+        status: 204,
+        headers: [],
+        body: bytes.empty(),
+      ),
+    ],
+    run: fn() -> Result<Int, http.HttpError> uses clock, io, random {
+      ping(access: http.simulated())
+    },
+  ) {
+    outcome => outcome.value == Ok(value: 204)
+      and sim.requests_made(outcome: outcome)
+        == [
+          sim.SentRequest(
+            method: "PUT",
+            url: "https://api.example.com/ping",
+            headers: [],
+            body: bytes.empty(),
+          ),
+        ],
+  }
+}
+
+pub fn version_of_tool(
+  tools: process.Process,
+) -> Result<Int, process.ProcessError> uses io {
+  let output = process.run(
+    access: tools,
+    program: "tool",
+    arguments: ["--version"],
+    options: process.options(seconds: 5),
+  )?;
+  match output.exit {
+    process.Exit.Exited(code: code) => Ok(value: code),
+    _ => Ok(value: -1),
+  }
+}
+
+example a_program_that_ends_otherwise for version_of_tool {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [
+      sim.program_signaled(
+        path: "/sim/tool",
+        arguments: ["--version"],
+        signal: "SIGSEGV",
+      ),
+    ],
+    run: fn() -> Result<Int, process.ProcessError> uses clock, io, random {
+      version_of_tool(tools: process.simulated())
+    },
+  ).value
+    == Ok(value: -1)
+    and sim.with_sim(
+      world: sim.quiet_world(),
+      setup: [
+        sim.program_timed_out(
+          path: "/sim/tool",
+          arguments: ["--version"],
+          stdout: "",
+        ),
+      ],
+      run: fn() -> Result<Int, process.ProcessError> uses clock, io, random {
+        version_of_tool(tools: process.simulated())
+      },
+    ).value
+      == Ok(value: -1)
+}
+
+example a_script_answers_the_exact_command for version_of_tool {
+  match sim.with_sim(
+    world: sim.quiet_world(),
+    setup: [
+      sim.program_any(path: "/sim/tool", exit_code: 2, stdout: "", stderr: ""),
+      sim.program(
+        path: "/sim/tool",
+        arguments: ["--version"],
+        exit_code: 0,
+        stdout: "tool 1.0\n",
+        stderr: "",
+      ),
+    ],
+    run: fn() -> Result<Int, process.ProcessError> uses clock, io, random {
+      version_of_tool(tools: process.simulated())
+    },
+  ) {
+    outcome => outcome.value == Ok(value: 0)
+      and sim.processes_started(outcome: outcome)
+        == [["/sim/tool", "--version"]],
+  }
+}
+```
+
 ## Related
 
 - [test](test.md): `with_world` (a world with only standard input, the clock, and randomness)
-- [fs](fs.md), [env](env.md), [http](http.md), [console](console.md): the functions that query the simulated world
+- [fs](fs.md), [env](env.md), [http](http.md), [console](console.md), [process](process.md): the functions that query the simulated world
 - [io-clock-random](io-clock-random.md): `input`, `now_ms`, and `seed` of `World`
 - [16 Testing](../language/16-testing.md)
 - [17 Resources and capabilities](../language/17-resources-and-capabilities.md)

@@ -190,7 +190,7 @@ pub fn pair() -> Int {
 | `==`、`!=`（境界 `Eq`） | `Int`、`Float64`、`String`、`Bool`、`Unit`、および要素がこれらを満たす `List`、`Option`、`Result`、レコード、バリアント |
 | `<` など（境界 `Ord`） | `Int`、`Float64`、`String`、`Bool` |
 
-関数型には、どちらもありません。`List`、`Option`、`Result`、レコード、バリアントに大小の比較はありません。使うとエラー `E0316` です。境界は、ジェネリック関数でも使います（[06 関数](06-functions.md)）。
+関数型には、どちらもありません。`List`、`Option`、`Result`、レコード、バリアントに大小の比較はありません。使うとエラー `E0316` です。`Eq` と `Ord` は固定で、プログラムが自分の型に実装することはできません。境界は、ジェネリック関数でも使います（[06 関数](06-functions.md)）。また、プログラムは、インターフェースと呼ばれる独自の境界を宣言できます（[22 インターフェース](22-interfaces.md)）。
 
 ```cernith-error E0316
 module guide.ordering;

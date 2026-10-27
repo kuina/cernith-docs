@@ -6,7 +6,7 @@ Every sample passes `cernith fmt --check`, `cernith check --release`, `cernith c
 
 "No diagnostics" is not the same as "every proof was attempted": definitions that use `Float64` arithmetic, `async`, or calls to a function such as `int.pow` stay at assurance level `typed` (see `summary.levels` in the JSON output of `cernith check --verify`). `tools/check_examples.py` lists them as notes; in these samples they are `average` (Float64), the async functions of `concurrency/`, and `raise` in `larger/minicalc`.
 
-Verified with Cernith cernith 2.0.0 (compiler repository commit `aae4ddcf`).
+Verified with Cernith cernith 2.0.0 (compiler repository commit `b576fd78`).
 
 ```text
 cernith test examples/types/refined_percent.cnth

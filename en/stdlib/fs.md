@@ -41,7 +41,25 @@ pub variant FsError {
 
 For functions that take a path and can fail, such as `open_read`, `list_names`, and `remove`, `path` holds the path string that was passed in, unchanged. For a failure in an operation after the file has been opened (such as `read_all`), `path` holds the path of that file including the root (which differs from the path that was passed in unless the root is `"."`).
 
-> Note: `std.fs` also defines the types `Entry`, `EntryKind`, `Change`, and `ChangeKind`. They represent the contents of a folder and notifications of changes, but the functions of `std.fs` do not use them.
+`std.fs` also defines the types `Entry` and `EntryKind`, which `fs.metadata` returns.
+
+```text
+pub record Entry {
+  name: String,
+  kind: EntryKind,
+  size: Int,
+  modified_ms: Int,
+}
+
+pub variant EntryKind {
+  File,
+  Folder,
+  Link,
+  Missing,
+}
+```
+
+> Note: `std.fs` also defines the types `Change` and `ChangeKind`. They represent notifications of changes, but the functions of `std.fs` do not use them.
 
 ## Roots and paths
 
@@ -140,6 +158,10 @@ Functions that read or write a whole file:
 | `fs.read_file_bytes(access, path)` | `Result<Bytes, FsError>` | Reads the whole file as a byte sequence |
 | `fs.write_text(access, path, text)` | `Result<Unit, FsError>` | Replaces the contents of the file with text |
 | `fs.write_file_bytes(access, path, bytes)` | `Result<Unit, FsError>` | Replaces the contents of the file with a byte sequence |
+| `fs.append_text(access, path, text)` | `Result<Unit, FsError>` | Adds text at the end of the file (the file is made if it is missing) |
+| `fs.append_bytes(access, path, bytes)` | `Result<Unit, FsError>` | Adds a byte sequence at the end of the file |
+| `fs.replace_text(access, path, text)` | `Result<Unit, FsError>` | Replaces the contents of the file so that a crash leaves the old contents or the new, never a mixture |
+| `fs.replace_bytes(access, path, bytes)` | `Result<Unit, FsError>` | The byte-sequence version of `replace_text` |
 
 Functions that use an open file:
 
@@ -161,6 +183,10 @@ Folders and checking for existence:
 | --- | --- | --- |
 | `fs.list_names(access, path)` | `Result<List<String>, FsError>` | The list of names in a folder |
 | `fs.is_present(access, path)` | `Bool` | Whether a file or folder exists at the path |
+| `fs.is_folder(access, path)` | `Bool` | Whether the path is a folder |
+| `fs.metadata(access, path)` | `Result<Entry, FsError>` | What the path is: its kind, size, and time of the last write |
+| `fs.make_folder(access, path)` | `Result<Unit, FsError>` | Makes a folder and the folders above it that are missing |
+| `fs.rename(access, from, to)` | `Result<Unit, FsError>` | Moves a file or folder to a new path |
 | `fs.remove(access, path)` | `Result<Unit, FsError>` | Deletes a file |
 
 Functions that create or inspect capabilities:
@@ -181,7 +207,7 @@ Others:
 | `fs.lines_of(text)` | `List<String>` | Splits text into lines |
 | `fs.describe(error)` | `String` | Turns an `FsError` into a string |
 
-The functions that read take a `ReadOnlyFs`, and the functions that write, as well as `remove` and `narrow`, take an `Fs`. To read with an `Fs`, convert it with `fs.read_only(access: files)`. For a function that only reads, it is good form to write its argument as a `ReadOnlyFs`. Then the type shows that the function does not write.
+The functions that read (including `is_folder` and `metadata`) take a `ReadOnlyFs`, and the functions that write, as well as `append_text`, `append_bytes`, `replace_text`, `replace_bytes`, `make_folder`, `rename`, `remove`, and `narrow`, take an `Fs`. To read with an `Fs`, convert it with `fs.read_only(access: files)`. For a function that only reads, it is good form to write its argument as a `ReadOnlyFs`. Then the type shows that the function does not write.
 
 ```cernith-error E0301
 module guide.fs_read_only_cannot_write;
@@ -244,6 +270,42 @@ pub fn write_file_bytes(
 ```
 
 The byte-sequence version of `write_text`. It replaces the contents of the file with `bytes`.
+
+### fs.append_text and fs.append_bytes
+
+```text
+pub fn append_text(
+  access: Fs,
+  path: String,
+  text: String,
+) -> Result<Unit, FsError> uses io
+
+pub fn append_bytes(
+  access: Fs,
+  path: String,
+  bytes: Bytes,
+) -> Result<Unit, FsError> uses io
+```
+
+Add `text` or `bytes` at the end of the file. The earlier contents are kept, and no newline is added. If there is no file, one is made; the folder above it must exist on the real file system (the result is `NotFound` if it does not; the simulated world creates the folders). If the path is outside the root, the result is `Denied`. Use them for a log that grows.
+
+### fs.replace_text and fs.replace_bytes
+
+```text
+pub fn replace_text(
+  access: Fs,
+  path: String,
+  text: String,
+) -> Result<Unit, FsError> uses io
+
+pub fn replace_bytes(
+  access: Fs,
+  path: String,
+  bytes: Bytes,
+) -> Result<Unit, FsError> uses io
+```
+
+Write `text` or `bytes` as the whole contents of the file so that a crash in the middle leaves the old contents or the new, never a mixture. The bytes go to a temporary file in the same folder (`.NAME.cernith-tmp`), are flushed, and the temporary file is renamed over the target. `write_text` and `write_file_bytes` empty the file first, so a crash can leave it empty or partly written. The target is created if it is missing. The result is `NotFound` if the folder does not exist, and `Denied` if the path is outside the root.
 
 ### fs.open_read and fs.open_write
 
@@ -323,6 +385,47 @@ pub fn is_present(access: ReadOnlyFs, path: String) -> Bool uses io
 ```
 
 Returns `true` if there is a file or folder at the path. For a path outside the root, the result is `false`, not an `Err` of `Denied`. Because it does not return a `Result`, the reason for a failure is not available.
+
+### fs.is_folder
+
+```text
+pub fn is_folder(access: ReadOnlyFs, path: String) -> Bool uses io
+```
+
+Returns `true` if the path is a folder, that is, if `list_names` succeeds on it. A file, a missing path, and a path outside the root give `false`.
+
+### fs.metadata
+
+```text
+pub fn metadata(
+  access: ReadOnlyFs,
+  path: String,
+) -> Result<Entry, FsError> uses io
+```
+
+Returns what the path is, without following a link. `name` is the last part of the path, `kind` is `File`, `Folder`, or `Link`, and `size` is the number of bytes of a file (0 for a folder and a link). `modified_ms` is the time of the last write, in milliseconds since 1970-01-01 UTC. The simulated world keeps no times and gives 0.
+
+A path that is not there is not an error: the result is `Ok` with `kind: EntryKind.Missing`. A path outside the root is `Err(error: FsError.Denied(path: ...))`.
+
+### fs.make_folder
+
+```text
+pub fn make_folder(access: Fs, path: String) -> Result<Unit, FsError> uses io
+```
+
+Makes the folder and the folders above it that are missing, like `mkdir -p`. A folder that is there already is not an error. On the real file system, the result is an `Err` (for example `NotFound` or `Failed`, depending on the system) if a part of the path is a file. The simulated world holds only files: a folder exists there while a file is below it, and `make_folder` succeeds without leaving a trace.
+
+### fs.rename
+
+```text
+pub fn rename(
+  access: Fs,
+  from: String,
+  to: String,
+) -> Result<Unit, FsError> uses io
+```
+
+Moves a file, or a folder with what is below it, to the new path `to`. Both paths are checked against the root, and a path outside it is `Denied`. A file at the new path is replaced (in one step where the system can); a folder is not, and the result is an `Err` (for example `Denied`). The result is `NotFound` if `from` is not there; the `path` of the error is `from`.
 
 ### fs.remove
 
@@ -1052,6 +1155,185 @@ example split_lines_splits_at_line_feeds for split_lines {
     and split_lines(text: "a\n\nb") == ["a", "", "b"]
     and split_lines(text: "\n") == [""]
     and split_lines(text: "") == []
+}
+```
+
+### Appending, replacing, renaming, and looking at a path
+
+Examples that add to a log, replace a state file, move a file to an archive folder, and ask what a path is.
+
+```cernith
+module guide.fs_edits;
+
+import std.bytes;
+import std.fs;
+import std.int;
+import std.sim;
+
+pub fn append_pair(
+  files: fs.Fs,
+  path: String,
+) -> Result<Unit, fs.FsError> uses io {
+  fs.append_bytes(
+    access: files,
+    path: path,
+    bytes: bytes.new(count: 2, fill: 2),
+  )
+}
+
+example append_bytes_adds_to_the_end for append_pair {
+  match run(
+    setup: [
+      sim.file_bytes(path: "a.bin", content: bytes.new(count: 1, fill: 1)),
+    ],
+    body: fn(files: fs.Fs) -> Result<Unit, fs.FsError> uses io {
+      append_pair(files: files, path: "a.bin")
+    },
+  ) {
+    outcome => option_hex(
+      found: sim.file_content_bytes(outcome: outcome, path: "a.bin"),
+    )
+      == "010202",
+  }
+}
+
+pub fn archive(files: fs.Fs, name: String) -> Result<Unit, fs.FsError> uses io {
+  fs.rename(access: files, from: name, to: "old/" ++ name)
+}
+
+example archive_moves_the_file for archive {
+  match run(
+    setup: [
+      sim.file(path: "a.txt", content: "A"),
+      sim.file(path: "old/a.txt", content: "older"),
+    ],
+    body: fn(files: fs.Fs) -> Result<Unit, fs.FsError> uses io {
+      archive(files: files, name: "a.txt")
+    },
+  ) {
+    outcome => outcome.value == Ok(value: ())
+      and sim.file_paths(outcome: outcome) == ["old/a.txt"]
+      and sim.file_content(outcome: outcome, path: "old/a.txt")
+        == Some(value: "A"),
+  }
+}
+
+example archive_reports_a_missing_file for archive {
+  run(
+    setup: [],
+    body: fn(files: fs.Fs) -> Result<Unit, fs.FsError> uses io {
+      archive(files: files, name: "nope.txt")
+    },
+  ).value
+    == Err(error: fs.FsError.NotFound(path: "nope.txt"))
+}
+
+pub fn describe_path(files: fs.ReadOnlyFs, path: String) -> String uses io {
+  match fs.metadata(access: files, path: path) {
+    Ok(value: entry) => match entry.kind {
+      fs.EntryKind.File => "file of "
+        ++ int.to_text(value: entry.size)
+        ++ " bytes",
+      fs.EntryKind.Folder => "folder",
+      fs.EntryKind.Link => "link",
+      fs.EntryKind.Missing => "missing",
+    },
+    Err(error: error) => fs.describe(error: error),
+  }
+}
+
+example describe_path_tells_what_a_path_is for describe_path {
+  run(
+    setup: [sim.file(path: "d/a.txt", content: "abc")],
+    body: fn(files: fs.Fs) -> List<String> uses io {
+      let data = fs.read_only(access: files);
+      [
+        describe_path(files: data, path: "d/a.txt"),
+        describe_path(files: data, path: "d"),
+        describe_path(files: data, path: "nope"),
+        describe_path(files: data, path: "../d"),
+      ]
+    },
+  ).value
+    == ["file of 3 bytes", "folder", "missing", "../d: denied"]
+}
+
+pub fn journal(files: fs.Fs, line: String) -> Result<Unit, fs.FsError> uses io {
+  fs.append_text(access: files, path: "journal.txt", text: line ++ "\n")
+}
+
+example journal_makes_the_file_and_adds_to_it for journal {
+  match run(
+    setup: [],
+    body: fn(files: fs.Fs) -> Result<Unit, fs.FsError> uses io {
+      journal(files: files, line: "start")?;
+      journal(files: files, line: "stop")
+    },
+  ) {
+    outcome => outcome.value == Ok(value: ())
+      and sim.file_content(outcome: outcome, path: "journal.txt")
+        == Some(value: "start\nstop\n"),
+  }
+}
+
+fn option_hex(found: Option<Bytes>) -> String {
+  match found {
+    Some(value: data) => bytes.to_hex(bytes: data),
+    None => "",
+  }
+}
+
+pub fn prepare(files: fs.Fs, path: String) -> Result<Bool, fs.FsError> uses io {
+  fs.make_folder(access: files, path: path)?;
+  Ok(value: fs.is_folder(access: fs.read_only(access: files), path: path))
+}
+
+example prepare_makes_the_folder for prepare {
+  run(
+    setup: [sim.file(path: "x/y.txt", content: "")],
+    body: fn(files: fs.Fs) -> List<Result<Bool, fs.FsError>> uses io {
+      [prepare(files: files, path: "x"), prepare(files: files, path: "../x")]
+    },
+  ).value
+    == [Ok(value: true), Err(error: fs.FsError.Denied(path: "../x"))]
+}
+
+fn run<T>(
+  setup: List<String>,
+  body: fn(files: fs.Fs) -> T uses io,
+) -> sim.SimOutcome<T> {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: setup,
+    run: fn() -> T uses clock, io, random {
+      body(files: fs.simulated())
+    },
+  )
+}
+
+pub fn save(
+  files: fs.Fs,
+  path: String,
+  text: String,
+) -> Result<Unit, fs.FsError> uses io {
+  fs.replace_text(access: files, path: path, text: text)
+}
+
+example save_replaces_the_whole_content for save {
+  match run(
+    setup: [sim.file(path: "state.txt", content: "old and longer")],
+    body: fn(files: fs.Fs) -> List<Result<Unit, fs.FsError>> uses io {
+      [
+        save(files: files, path: "state.txt", text: "new"),
+        save(files: files, path: "../state.txt", text: "new"),
+      ]
+    },
+  ) {
+    outcome => outcome.value
+      == [Ok(value: ()), Err(error: fs.FsError.Denied(path: "../state.txt"))]
+      and sim.file_content(outcome: outcome, path: "state.txt")
+        == Some(value: "new"),
+  }
 }
 ```
 

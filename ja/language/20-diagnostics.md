@@ -13,7 +13,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 - `cernith explain コード` は、コードの説明、直し方、例を表示します。
 - 同じ原因から連鎖して起こる診断は抑えられ、原因ごとに 1 つだけ報告されます。
 
-コードの番号は、百の位がおおよその分野を表します：`E01xx` 書式、`E02xx` 名前とモジュール（テストの `E0222`・`E0223` を含む）、`E03xx` 型、`E04xx` 効果、`E05xx` 契約と証明義務（停止性の `E0509` を含む）、`E06xx` 停止性、`E07xx` 未完成の箇所、`E11xx` リソース、`E12xx` 並行処理、`E13xx` ケイパビリティ。警告（`W`）も同じ付け方で、`W0102`（書式）、`W0504`・`W0801`（契約と証明義務）、`W0701`（未完成の箇所）、`W1203`（並行処理）があります。
+コードの番号は、百の位がおおよその分野を表します：`E01xx` 書式、`E02xx` 名前とモジュール（テストの `E0222`・`E0223` を含む）、`E03xx` 型、`E04xx` 効果、`E05xx` 契約と証明義務（停止性の `E0509` を含む）、`E06xx` 停止性、`E07xx` 未完成の箇所、`E11xx` リソース、`E12xx` 並行処理、`E13xx` ケイパビリティ、`E14xx` インターフェースと遅延列。警告（`W`）も同じ付け方で、`W0102`（書式）、`W0504`・`W0801`（契約と証明義務）、`W0701`（未完成の箇所）、`W1203`（並行処理）があります。
 
 ## 字句・構文・書式
 
@@ -44,7 +44,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E0210` | import-cycle | モジュールが互いに `import` している（循環） | [14](14-modules-and-packages.md) |
 | `E0211` | constant-cycle | 定数が自分自身に依存している | [14](14-modules-and-packages.md) |
 | `E0215` | abstract-type | `distinct` 型を、定義したモジュールの外で構築・展開した | [08](08-refined-and-distinct-types.md) |
-| `E0216` | private-in-public | 公開された署名・フィールド・契約に、非公開の型や名前がある | [14](14-modules-and-packages.md) |
+| `E0216` | private-in-public | 公開された署名・フィールド・契約に、非公開の型や名前がある | [14](14-modules-and-packages.md)、[23](23-units-of-measure.md) |
 | `E0218` | module-path-mismatch | モジュール名がファイルのパスと一致しない | [14](14-modules-and-packages.md) |
 | `E0219` | reserved-module-name | `std` 以下のモジュール名を使った | [14](14-modules-and-packages.md) |
 | `E0224` | invalid-manifest | パッケージの `cernith.toml` が使えない | [14](14-modules-and-packages.md) |
@@ -59,7 +59,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | コード | 名前 | 意味 | 章 |
 | --- | --- | --- | --- |
 | `E0212` | bad-foreign-declaration | `foreign` の行が、未知のバックエンド・重複・不正なシンボルを指す | [15](15-foreign-functions.md) |
-| `E0213` | foreign-type-not-supported | foreign の境界を越えられない型 | [15](15-foreign-functions.md) |
+| `E0213` | foreign-type-not-supported | foreign の境界を越えられない型 | [15](15-foreign-functions.md)、[23](23-units-of-measure.md) |
 | `E0220` | missing-foreign-target | foreign 関数に、ビルドするバックエンド向けの実装がない | [15](15-foreign-functions.md) |
 
 ## テスト
@@ -74,7 +74,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | コード | 名前 | 意味 | 章 |
 | --- | --- | --- | --- |
 | `E0301` | type-mismatch | 期待された型と違う型の値（`distinct` 型が関わるときは `E0303`） | [03](03-types.md) |
-| `E0302` | implicit-conversion | `Int` と `Float64` を混ぜた | [03](03-types.md) |
+| `E0302` | implicit-conversion | `Int` と `Float64` を混ぜた | [03](03-types.md)、[23](23-units-of-measure.md) |
 | `E0303` | incompatible-identities | `distinct` 型を、別の型の代わりに使った（または逆） | [08](08-refined-and-distinct-types.md) |
 | `E0304` | missing-argument-label | 呼び出しの引数にラベルがない | [04](04-expressions.md) |
 | `E0305` | non-exhaustive-match | `match` がすべての場合を覆っていない | [07](07-records-and-variants.md) |
@@ -87,16 +87,21 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E0313` | misplaced-spec-keyword | `result` や `self` を、使える節の外で使った | [09](09-contracts.md) |
 | `E0314` | type-alias | 型の別名を宣言した | [03](03-types.md) |
 | `E0315` | wrong-type-arguments | 型引数の個数が違う | [06](06-functions.md) |
-| `E0316` | bound-not-satisfied | `Eq` や `Ord` が必要な型が、それを満たさない | [06](06-functions.md) |
+| `E0316` | bound-not-satisfied | `Eq`、`Ord`、またはインターフェースが必要な型が、それを満たさない | [06](06-functions.md)、[22](22-interfaces.md)、[08](08-refined-and-distinct-types.md) |
 | `E0317` | no-such-field | 存在しないフィールド（制約付き型の `.value` を含む） | [07](07-records-and-variants.md) |
-| `E0318` | unknown-bound | `Eq` と `Ord` 以外の境界 | [06](06-functions.md) |
+| `E0318` | unknown-bound | `Eq`・`Ord` でも、見えているインターフェースでもない境界 | [06](06-functions.md)、[22](22-interfaces.md) |
 | `E0319` | not-a-value | 型やモジュールを値として使った | [04](04-expressions.md) |
-| `E0320` | cannot-infer | 引数も文脈も型を決めない | [06](06-functions.md) |
+| `E0320` | cannot-infer | 引数も文脈も型を決めない | [06](06-functions.md)、[08](08-refined-and-distinct-types.md) |
 | `E0321` | assign-to-non-var | `let` やパラメータに代入した | [05](05-statements.md) |
 | `E0322` | closure-captures-var | 関数式が、周りの関数の `var` を使った | [05](05-statements.md) |
 | `E0323` | let-has-type | `let` に型注釈を書いた | [05](05-statements.md) |
 | `E0331` | spec-function-in-code | `spec fn` や property を、実行できるコードから呼んだ | [09](09-contracts.md) |
 | `E0332` | spec-construct-in-code | 仕様の中の量化子・ラムダ、またはコードの中の量化子 | [09](09-contracts.md) |
+| `E0350` | or-pattern-bindings-differ | or パターンの選択肢が、同じ名前を束縛していない | [07](07-records-and-variants.md) |
+| `E0351` | or-pattern-alternatives | or パターンの選択肢が `_` や名前である、重複している、または宣言順に並んでいない | [07](07-records-and-variants.md) |
+| `E0360` | unit-mismatch | ある単位（または単位なし）の数が、別の単位の期待される場所にある | [23](23-units-of-measure.md) |
+| `E0361` | unit-constructor-argument | 単位のコンストラクタを、`Int` でも `Float64` でもないものに適用した | [23](23-units-of-measure.md) |
+| `E0362` | unit-not-canonical | 量の型の単位が、正準形で書かれていない | [23](23-units-of-measure.md) |
 
 ## 効果
 
@@ -166,6 +171,17 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E1206` | await-of-nothing | 中断できないものの前に `await` を書いた | [18](18-concurrency.md) |
 | `E1207` | await-in-using | `using` の本体が中断点を含む | [18](18-concurrency.md) |
 | `W1203` | wait-cannot-complete | チャネルから受信するが、送信しない | [18](18-concurrency.md) |
+
+## インターフェースと遅延列
+
+| コード | 名前 | 意味 | 章 |
+| --- | --- | --- | --- |
+| `E1401` | invalid-interface | インターフェースの宣言が規則に反する（`Self` のないメソッド、型パラメータを持つメソッド、インターフェース自体の型パラメータ） | [22](22-interfaces.md) |
+| `E1402` | incoherent-impl | `impl` が、インターフェースと型コンストラクタごとにインスタンスは 1 つ、という規則に反する | [22](22-interfaces.md) |
+| `E1403` | impl-does-not-match | `impl` がインターフェースと合っていない | [22](22-interfaces.md) |
+| `E1404` | cannot-derive | `impl` が `derive` を求めたが、コンパイラが導出できない | [22](22-interfaces.md) |
+| `E1405` | interface-is-not-a-type | 型が必要な場所にインターフェースを書いた | [22](22-interfaces.md) |
+| `E1406` | loop-over-seq-clause | `Seq` に対する `for` に `invariant` または `decreases` の節がある | [05](05-statements.md) |
 
 ## 関連
 

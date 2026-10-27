@@ -77,6 +77,8 @@ property result_in_range for clamp(value: Int, low: Int, high: Int) {
 | `cernith test ファイル` | `example` と `property` を実行する。すべて通れば 0 |
 | `cernith run ファイル` | `main` を実行する |
 | `cernith fmt ファイル` | ファイルを正準形（[19 正準形](19-canonical-form.md)）に書き換える |
+| `cernith api [モジュール] [--root フォルダ]` | フォルダ（既定は現在のフォルダ）にあるモジュールの公開インターフェースを、本体を除いて出力する。公開された定義ごとに、直前のコメント行、先頭行、`requires` と `ensures`、その定義を名指しする最初の example を示す。`--format json` で JSON になる。何も出力しなければ 2 で終了する |
+| `cernith eval ファイル '式'` | ファイルのモジュールのスコープで式を評価し、型と値を JSON で出力する。値が得られれば 0、式が検査を通らなければ 1、欠陥なら 70、ステップ予算を使い切ると 71 で終了する |
 
 診断は、既定では JSON で出力されます。`--format compact` を付けると、1 件につき 1 行になります。
 
@@ -94,6 +96,31 @@ passed   example  guide.first.keeps_inside
 passed   property guide.first.result_in_range
 3 tests: 3 passed
 ```
+
+`cernith eval` を使うと、`example` を書かなくても、呼び出しの結果が分かります。次の例では、上の最初のプログラムを `first.cnth` として保存したモジュールを使います。
+
+```text
+$ cernith eval first.cnth 'clamp(value: 12, low: 0, high: 9)'
+{
+  "ok": true,
+  "schema": "cernith-eval/0.1",
+  "steps": 24,
+  "type": "Int",
+  "value": "9"
+}
+```
+
+式は純粋でなければなりません。モジュールの名前は、非公開のものも含めてすべて使えます。`--session` を付けると、`eval` は標準入力から 1 行ずつ（式、`let 名前 = 式`、`import モジュール` のいずれか）読み、1 行ごとに JSON を 1 行出力します。
+
+そのほかのコマンドを、1 行ずつ示します。
+
+| コマンド | 内容 |
+| --- | --- |
+| `cernith profile ファイル` | `main` を参照インタープリタで実行し、関数ごとの呼び出し回数、評価ステップ数、割り当て数を数える。数え方は実行のたびに同じ。`--tests` ではテストを、`--format table` では表を出力する |
+| `cernith debug ファイル` | `main` の実行を 1 回記録し、標準入力から 1 行ずつ読んだ質問（`summary`、`stack`、`locals`、`find-call`、`first-where`、`step` など）に、JSON を 1 行ずつ出力して答える |
+| `cernith lsp` | エディタ向けの言語サーバー（LSP 3.17）。標準入出力で動き、診断、クイックフィックス、ホバー、定義、参照、シンボル、整形、名前変更を提供する |
+| `cernith graph フォルダ` | パッケージのファイルと依存関係、およびインターフェースのフィンガープリントを、ビルドツール向けに JSON で出力する |
+| `cernith outline [モジュール]`、`cernith show モジュール::名前` | パッケージの定義を、アドレスとハッシュ付きで一覧する。1 つの定義を出力する（JSON）。種別には `interface`、`impl`、`manifest` も含まれる |
 
 ## 次に読むもの
 

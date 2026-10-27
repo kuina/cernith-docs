@@ -12,10 +12,16 @@ pub capability Console;
 pub variant ConsoleError {
   Failed(reason: String),
 }
+
+pub variant Stream {
+  Output,
+  Error,
+}
 ```
 
 - `Console` is a capability with no fields. It has no grant contents; only holding it is meaningful. It cannot be compared with `==`.
 - `ConsoleError` is the error for when reading or writing fails. `reason` holds a string giving the reason.
+- `Stream` names the two output streams a program can ask about: `Output` (standard output) and `Error` (standard error).
 
 ## Program shape
 
@@ -65,6 +71,8 @@ pub fn greet() -> Result<Unit, console.ConsoleError> uses io {
 | `console.write_line(access, text)` | `Result<Unit, ConsoleError>` | Writes one line to standard output |
 | `console.write_bytes(access, bytes)` | `Result<Unit, ConsoleError>` | Writes a byte sequence to standard output as it is |
 | `console.write_error_line(access, text)` | `Result<Unit, ConsoleError>` | Writes one line to standard error |
+| `console.is_terminal(access, stream)` | `Bool` | Whether the stream is a terminal |
+| `console.width(access, stream)` | `Option<Int>` | The width of the terminal in columns |
 | `console.describe(error)` | `String` | Turns a `ConsoleError` into a string |
 | `console.simulated()` | `Console` | A capability for tests |
 
@@ -142,6 +150,22 @@ pub fn write_error_line(
 ```
 
 Writes `text` to standard error as one line. Write the warnings and error reports that a program emits here, separately from its result. In a test, the lines do not go into `output`; they can be read with `sim.stderr_lines` ([sim](sim.md)).
+
+### console.is_terminal
+
+```text
+pub fn is_terminal(access: Console, stream: Stream) -> Bool uses io
+```
+
+Returns `true` if the stream is a terminal, that is, if a person looks at it, and `false` if it is a pipe or a file. A target that has no terminal (a page, a module without a host) answers `false`. Use it to decide whether to write colors or progress marks. In a simulated world the standard streams are pipes unless the setup of `sim.with_sim` contains `sim.terminal(width: ...)` ([sim](sim.md)); then both streams are a terminal.
+
+### console.width
+
+```text
+pub fn width(access: Console, stream: Stream) -> Option<Int> uses io
+```
+
+Returns the width of the terminal in columns, as `Some(value: columns)`, if the stream is a terminal whose size the system tells. Otherwise the result is `None`. In a simulated world, the width is the one given to `sim.terminal`.
 
 ### console.describe
 
@@ -362,6 +386,76 @@ example warn_goes_to_the_error_stream for warn {
 ```
 
 The exit status of `main` is 0 if `report_total` succeeds. If it fails with a `ConsoleError`, it writes the description to standard error and the exit status is 1.
+
+### Asking about the terminal
+
+The following module chooses a width and decides on colors. The simulated world is a pipe unless the setup says it is a terminal.
+
+```cernith
+module guide.console_terminal;
+
+import std.console;
+import std.sim;
+
+pub fn columns(access: console.Console) -> Int uses io {
+  match console.width(access: access, stream: console.Stream.Output) {
+    Some(value: width) => width,
+    None => 80,
+  }
+}
+
+example columns_is_the_width_of_a_terminal_or_80 for columns {
+  look(
+    setup: [sim.terminal(width: 120)],
+    body: fn(access: console.Console) -> Int uses io {
+      columns(access: access)
+    },
+  )
+    == 120
+    and look(
+      setup: [],
+      body: fn(access: console.Console) -> Int uses io {
+        columns(access: access)
+      },
+    )
+      == 80
+}
+
+fn look<T>(
+  setup: List<String>,
+  body: fn(access: console.Console) -> T uses io,
+) -> T {
+  sim.with_sim(
+    world: sim.quiet_world(),
+    setup: setup,
+    run: fn() -> T uses clock, io, random {
+      body(access: console.simulated())
+    },
+  ).value
+}
+
+pub fn wants_color(access: console.Console) -> Bool uses io {
+  console.is_terminal(access: access, stream: console.Stream.Output)
+    and not console.is_terminal(access: access, stream: console.Stream.Error)
+}
+
+example color_only_for_a_terminal for wants_color {
+  look(
+    setup: [sim.terminal(width: 80)],
+    body: fn(access: console.Console) -> Bool uses io {
+      console.is_terminal(access: access, stream: console.Stream.Error)
+    },
+  )
+    == true
+    and look(
+      setup: [],
+      body: fn(access: console.Console) -> Bool uses io {
+        wants_color(access: access)
+      },
+    )
+      == false
+}
+```
 
 ## Related
 

@@ -201,12 +201,125 @@ pub fn go(light: Light) -> Bool {
 }
 ```
 
+### or パターン
+
+`|` でつないだ選択肢は、1 つのアームと 1 つの本体を共有します。or パターンは、アームのパターンとしても、コンストラクタのパターンの中のフィールドのパターンとしても書けます（`Some(value: Light.Red | Light.Yellow)`）。規則は次のとおりです。
+
+- どの選択肢も、同じ名前を、同じ型で束縛します。ある選択肢にない名前や、ある選択肢にだけある名前は `E0350` です。別の選択肢と型が違う名前は `E0301` です。本体からは、各名前が 1 つだけ見えます。
+- 選択肢は、リテラルかケースです。`_` と名前だけの選択肢は、すべての値に合い、ほかの選択肢を意味のないものにするので、`E0351` です。
+- 選択肢は、厳密に増加する順に書きます。リテラルは値の順（`false` が `true` より前）、ケースは型の宣言の順です（`Red` が `Yellow` より前、`Some` が `None` より前、`Ok` が `Err` より前）。同じ選択肢の繰り返しと、順序の誤りは `E0351` で、メッセージが順序を示します。
+- 網羅性の検査は、選択肢を 1 行ずつとして扱います。
+- パターンガード（アームの中の `if`）はありません。`for` の先頭には、選択肢を書けません。
+
+```cernith
+module guide.or_patterns;
+
+pub variant Light {
+  Red,
+  Yellow,
+  Green,
+}
+
+pub variant Shape {
+  Circle(radius: Int),
+  Square(side: Int),
+  Dot,
+}
+
+pub fn is_small(number: Int) -> Bool {
+  match number {
+    -1 | 0 | 1 => true,
+    _ => false,
+  }
+}
+
+example is_small_takes_literals for is_small {
+  is_small(number: 0) and is_small(number: -1) and not is_small(number: 2)
+}
+
+pub fn must_stop(light: Light) -> Bool {
+  match light {
+    Light.Red | Light.Yellow => true,
+    Light.Green => false,
+  }
+}
+
+example must_stop_joins_two_cases for must_stop {
+  must_stop(light: Light.Red)
+    and must_stop(light: Light.Yellow)
+    and not must_stop(light: Light.Green)
+}
+
+pub fn size(shape: Shape) -> Int {
+  match shape {
+    Shape.Circle(radius: n) | Shape.Square(side: n) => n,
+    Shape.Dot => 0,
+  }
+}
+
+example size_binds_the_same_name for size {
+  size(shape: Shape.Circle(radius: 3)) == 3
+    and size(shape: Shape.Square(side: 4)) == 4
+    and size(shape: Shape.Dot) == 0
+}
+
+pub fn stop_in_option(light: Option<Light>) -> Bool {
+  match light {
+    Some(value: Light.Red | Light.Yellow) => true,
+    Some(value: Light.Green) => false,
+    None => false,
+  }
+}
+
+example stop_in_option_uses_a_field_pattern for stop_in_option {
+  stop_in_option(light: Some(value: Light.Yellow))
+    and not stop_in_option(light: None)
+}
+```
+
+`Shape.Dot` は名前を束縛しないので、`Shape.Circle(radius: n)` とつなげません（`E0350`）。
+
+```cernith-error E0350
+module guide.or_patterns;
+
+pub variant Shape {
+  Circle(radius: Int),
+  Dot,
+}
+
+pub fn size(shape: Shape) -> Int {
+  match shape {
+    Shape.Circle(radius: n) | Shape.Dot => n,
+  }
+}
+```
+
+選択肢は、宣言の順に書かなければなりません。次の例では、`Light.Yellow` が `Light.Red` より前に書かれています。
+
+```cernith-error E0351
+module guide.or_patterns;
+
+pub variant Light {
+  Red,
+  Yellow,
+  Green,
+}
+
+pub fn must_stop(light: Light) -> Bool {
+  match light {
+    Light.Yellow | Light.Red => true,
+    Light.Green => false,
+  }
+}
+```
+
 ## 網羅性
 
 `match` は、被判別値のすべての値を覆わなければなりません。覆っていないと `E0305`（non-exhaustive-match）で、診断が、覆われていない値の例を 1 つ、ソースの書き方で示します（`Light.Yellow`、`Some(value: false)`）。
 
 - バリアント、レコード、`Bool`、`Option`、`Result` は、入れ子の深さにかかわらず、完全に検査されます。
 - `Int` と `String` のリテラルは、型全体を覆えません。リテラルのパターンだけの `match` には、`_` か名前のケースが必要です。
+- or パターンの選択肢は、1 つずつが 1 行として数えられます。`Light.Red | Light.Yellow` だけでは `Light.Green` が覆われません（`E0305`）。
 
 覆われていない場合に実行時に失敗する、という扱いはありません。コンパイル時（チェック時）に拒否されます。これによって、バリアントにケースを足したとき、そのバリアントを `match` しているすべての箇所が、検査で見つかります。
 

@@ -110,14 +110,14 @@ pub fn first<T>(items: List<T>) -> Option<T>
 pub record Box<T> { item: T, }
 ```
 
-型パラメータが取れる型を制限するために、**境界**を付けられます。境界は `Eq` と `Ord` の 2 つだけで、利用者が定義することはできません。
+型パラメータが取れる型を制限するために、**境界**を付けられます。境界は、`Eq`、`Ord`、またはプログラムが宣言する**インターフェース**です（[22 インターフェース](22-interfaces.md)）。型パラメータには、`+` でつないで複数の境界を付けられます：`<K: Ord + show.Show>`。`Eq` と `Ord` は固定で、プログラムが自分の型に実装することはできません。
 
-| 境界 | 使える演算 | 満たす型 |
+| 固定の境界 | 使える演算 | 満たす型 |
 | --- | --- | --- |
 | `Eq` | `==`、`!=` | [03 型](03-types.md) の「等価と順序」を参照 |
 | `Ord` | `Eq` に加えて `<`、`<=`、`>`、`>=`。`Map` のキー、`Set` の要素にもなれる | 同上 |
 
-境界のない型パラメータの値には、`==` も `<` も使えません。使うと `E0316` です。境界を満たさない型を渡しても `E0316` です（型引数が決まったあとで検査されるので、メッセージには具体的な型が現れます）。`Eq` と `Ord` 以外の名前は `E0318` です。
+境界のない型パラメータの値には、`==` も `<` も使えません。使うと `E0316` です。境界を満たさない型を渡しても `E0316` です（型引数が決まったあとで検査されるので、メッセージには具体的な型が現れます）。`Eq`、`Ord`、スコープにあるインターフェースのどれでもない名前は `E0318` です。インターフェースの境界を型が満たさない場合（型に `impl` がない場合）も `E0316` です。
 
 ```cernith
 module guide.generics;
@@ -140,6 +140,27 @@ pub fn unbox<T>(box: Box<T>) -> T {
 
 example unbox_returns_the_item for unbox {
   unbox(box: Box(item: 3)) == 3
+}
+```
+
+インターフェースの境界があれば、値にそのインターフェースのメソッドを呼べます。次の関数には、`<` のための `Ord` と、`show.text` のための `Show` の両方が必要です。
+
+```cernith
+module guide.bounds;
+
+import std.show;
+
+pub fn smaller_text<K: Ord + show.Show>(first: K, second: K) -> String {
+  if first < second {
+    show.text(value: first)
+  } else {
+    show.text(value: second)
+  }
+}
+
+example smaller_text_writes_the_smaller for smaller_text {
+  smaller_text(first: 3, second: 2) == "2"
+    and smaller_text(first: "a", second: "b") == "\"a\""
 }
 ```
 

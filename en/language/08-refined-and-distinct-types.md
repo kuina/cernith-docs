@@ -196,6 +196,135 @@ example three_is_three for three {
 }
 ```
 
+## Type parameters and tags
+
+Both forms can take type parameters, with bounds, as a record can ([06 Functions](06-functions.md)).
+
+```text
+type Id<T> = distinct Int;
+type Stack<T> = distinct List<T>;
+type NonEmpty<T> = List<T> where self.length > 0;
+```
+
+- The base type at the arguments of a use is the base with the parameters replaced. `Stack<Int>.value` is a `List<Int>`, and `NonEmpty<Int>` is a refined type over `List<Int>`.
+- A parameter that the base does not mention is a **tag**. `Id<Enemy>` and `Id<Bullet>` are different types (`E0303`), although both hold an `Int`. A tag costs nothing at run time.
+- The arguments of a constructor come from the expected type: `Id(value: 7)` is an `Id<Enemy>` where an `Id<Enemy>` is expected. Where nothing gives them, write them with `::<>`: `Id::<Enemy>(value: 1)`. Otherwise the error is `E0320`.
+- A refinement may mention the parameters. A bound that the declaration needs is written on the parameter (`Keyed<K: Ord>`), and an argument that does not satisfy it is `E0316`.
+- A refined list is indexed like its base (`items[0]`), and `NonEmpty.check(value: ...)` works as for any refined type. As before, `NonEmpty<Int>` is a subtype of `List<Int>`.
+
+```cernith
+module guide.tags;
+
+pub record Bullet {
+  damage: Int,
+}
+
+pub record Enemy {
+  hp: Int,
+}
+
+pub type Id<T> = distinct Int;
+
+pub type NonEmpty<T> = List<T> where self.length > 0;
+
+pub type Stack<T> = distinct List<T>;
+
+pub fn as_list(items: NonEmpty<Int>) -> List<Int> {
+  items
+}
+
+example as_list_keeps_the_elements for as_list {
+  as_list(items: NonEmpty(value: [1, 2])) == [1, 2]
+}
+
+pub fn bullet_number() -> Int {
+  Id::<Bullet>(value: 1).value
+}
+
+example bullet_number_reads_the_number for bullet_number {
+  bullet_number() == 1
+}
+
+pub fn depth(stack: Stack<Int>) -> Int {
+  stack.value.length
+}
+
+example depth_reads_the_list for depth {
+  depth(stack: Stack(value: [1, 2, 3])) == 3
+}
+
+pub fn first_or(items: List<Int>, fallback: Int) -> Int {
+  match NonEmpty.check(value: items) {
+    Some(value: found) => found[0],
+    None => fallback,
+  }
+}
+
+example first_or_checks_the_length for first_or {
+  first_or(items: [4, 5], fallback: 0) == 4
+    and first_or(items: [], fallback: 9) == 9
+}
+
+pub fn next_enemy(id: Id<Enemy>) -> Id<Enemy> {
+  Id(value: id.value + 1)
+}
+
+example next_enemy_adds_one for next_enemy {
+  next_enemy(id: Id(value: 7)).value == 8
+}
+
+pub fn same_enemy(first: Id<Enemy>, second: Id<Enemy>) -> Bool {
+  first == second
+}
+
+example same_enemy_compares_numbers for same_enemy {
+  same_enemy(first: Id(value: 1), second: Id(value: 1))
+    and not same_enemy(first: Id(value: 1), second: Id(value: 2))
+}
+```
+
+```cernith-error E0303
+module guide.tags;
+
+pub record Bullet {
+  damage: Int,
+}
+
+pub record Enemy {
+  hp: Int,
+}
+
+pub type Id<T> = distinct Int;
+
+pub fn to_bullet(id: Id<Enemy>) -> Id<Bullet> {
+  id
+}
+```
+
+```cernith-error E0320
+module guide.tags;
+
+pub type Id<T> = distinct Int;
+
+pub fn number() -> Int {
+  Id(value: 1).value
+}
+```
+
+```cernith-error E0316
+module guide.tags;
+
+pub record Box {
+  count: Int,
+}
+
+pub type Keyed<K: Ord> = distinct List<K>;
+
+pub fn size(keys: Keyed<Box>) -> Int {
+  0
+}
+```
+
 ## Subtyping
 
 Subtyping in Cernith is made of a single rule: **a refined type is a subtype of its base type** (`Percent` is a subtype of `Int`; transitively, so is a refined type whose base is another refined type).

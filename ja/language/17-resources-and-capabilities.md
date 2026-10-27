@@ -134,6 +134,18 @@ pub capability Console;
 - ケイパビリティに対する操作は、ケイパビリティをラベル付きのパラメータとして取り、**かつ `uses io` を宣言します**。ケイパビリティを持っているだけでは効果を持ちません。操作を呼ぶ関数が `uses io` を宣言していなければ `E0401` です（[11 効果](11-effects.md)）。パラメータにケイパビリティを持たない関数は、その資源に触れません。
 - `clock` と `random` は、ケイパビリティを使わない効果のままです。
 
+### 標準ライブラリのケイパビリティ
+
+| ケイパビリティ | モジュール | `manifest` に書く権限の内容 | 権限 |
+| --- | --- | --- | --- |
+| `Console` | [std.console](../stdlib/console.md) | なし | 標準入出力 |
+| `Fs`、`ReadOnlyFs` | [std.fs](../stdlib/fs.md) | `root`：フォルダ | 根の下のファイル（読み書き、または読み取り専用） |
+| `Env` | [std.env](../stdlib/env.md) | なし | 環境変数の読み取り |
+| `Http` | [std.http](../stdlib/http.md) | `hosts`：接続してよいホスト名（`"*"` はテスト用） | そのホストへの HTTP リクエスト |
+| `Process` | [std.process](../stdlib/process.md) | `programs`（それぞれの名前、絶対パス、引数の規則）、`work_root`、`environment`、`max_output_bytes`、`max_seconds` | 列挙されたプログラムを起動し、その出力を読む |
+
+`Process` は、この一覧で最大の権限です。起動するプログラムは Cernith が検査したものではないからです。その権限の内容は許可リストです。呼び出しはプログラムを名前で指定し、パスは決して渡しません。渡せる引数は、そのプログラムの規則が許すものだけです。子プロセスが見る環境変数は、権限の内容に挙げたものだけです。どの呼び出しにも、時間の上限と出力の上限があります。`cernith audit` は、権限の内容全体を出力します（[std.process](../stdlib/process.md)）。
+
 ### manifest
 
 ```text
@@ -145,7 +157,7 @@ pub manifest Caps {
 pub fn main(args: List<String>, caps: Caps) -> Int uses io { ... }
 ```
 
-`manifest 名前 { フィールド: ケイパビリティの型(権限の内容), ... }` は、プログラムが必要とするすべての権限の宣言で、フィールドがケイパビリティの値になるレコードです。権限の内容は、ソースに書きます。プログラムには `manifest` が高々 1 つあり、`main` はそれを 2 番目のパラメータとして受け取ります。そうでないと `E1303` です。ビルドするバックエンドの世界が提供しないケイパビリティを `manifest` が挙げていると、そのバックエンドではビルドできず、`E1305` です（たとえば、ブラウザーのページのファイルは専用領域 `@opfs` にだけあり、作業ディレクトリにはありません）。`std.io`、`std.clock`、`std.random` の関数は、ケイパビリティを取らず、`uses io`（`clock`、`random`）を宣言すれば呼べます。`main(args)` の形（`manifest` を使わない）でも、`manifest` を使う形でも同じです。
+`manifest 名前 { フィールド: ケイパビリティの型(権限の内容), ... }` は、プログラムが必要とするすべての権限の宣言で、フィールドがケイパビリティの値になるレコードです。権限の内容は、ソースに書きます。プログラムには `manifest` が高々 1 つあり、`main` はそれを 2 番目のパラメータとして受け取ります。そうでないと `E1303` です。ビルドするバックエンドの世界が提供しないケイパビリティを `manifest` が挙げていると、そのバックエンドではビルドできず、`E1305` です（たとえば、ブラウザーのページのファイルは専用領域 `@opfs` にだけあり、作業ディレクトリにはなく、`Process` も提供されません）。`std.io`、`std.clock`、`std.random` の関数は、ケイパビリティを取らず、`uses io`（`clock`、`random`）を宣言すれば呼べます。`main(args)` の形（`manifest` を使わない）でも、`manifest` を使う形でも同じです。
 
 ```cernith
 module guide.report;
@@ -199,7 +211,7 @@ pub fn main(args: List<String>, caps: Caps) -> Int uses io {
 
 ### テストでの権限
 
-テストでは、ケイパビリティを `fs.simulated()`、`fs.simulated_read_only()`、`console.simulated()` のような関数で作れます。これらはシミュレート世界を相手にし、`example` と `property` の本文、および `std.sim.with_sim` と `std.test.with_world` に渡す `run:` のラムダの中だけで呼べます。ほかの場所（普通の補助関数の中など）で呼ぶと `E1302` です。補助関数には、ケイパビリティを引数で渡します。`manifest` のレコードをテストで使うときは、`Caps(files: fs.simulated(), console: console.simulated())` のように、フィールドごとに組み立てます（[std.sim](../stdlib/sim.md)）。
+テストでは、ケイパビリティを `fs.simulated()`、`fs.simulated_read_only()`、`console.simulated()`、`process.simulated_with(...)` のような関数で作れます。これらはシミュレート世界を相手にし、`example` と `property` の本文、および `std.sim.with_sim` と `std.test.with_world` に渡す `run:` のラムダの中だけで呼べます。ほかの場所（普通の補助関数の中など）で呼ぶと `E1302` です。補助関数には、ケイパビリティを引数で渡します。`manifest` のレコードをテストで使うときは、`Caps(files: fs.simulated(), console: console.simulated())` のように、フィールドごとに組み立てます（[std.sim](../stdlib/sim.md)）。
 
 ```cernith-error E1302
 module guide.report;
@@ -213,7 +225,7 @@ pub fn make() -> fs.ReadOnlyFs {
 
 ### ライブラリが持つ義務
 
-外の資源に触れる標準ライブラリの関数は、仕様、`example`、シミュレート世界の中での対応物を持ちます。資源を得る関数は、`Result<リソース, E>` を返し、`E` は閉じたバリアントです。ファイルとコンソール（`std.fs`、`std.console`、`std.env`、`std.http`、`std.path`）が、この仕組みの上に作られています。`Fs` と `ReadOnlyFs` は根のディレクトリを持ち、すべてのパスは、根の外に出られないように正規化されます。根から出るパスは `Denied` です。標準ライブラリが内部で使う関数（`std.sys.request`、`std.async.erase`、`std.async.reveal` など）は、ケイパビリティなしで資源に触れたり、値の型を変えたりできるので、プログラムから呼ぶと `E1306` です。ケイパビリティを取る `std.fs`、`std.env`、`std.http`、`std.console` などの関数を使います。
+外の資源に触れる標準ライブラリの関数は、仕様、`example`、シミュレート世界の中での対応物を持ちます。資源を得る関数は、`Result<リソース, E>` を返し、`E` は閉じたバリアントです。ファイル、コンソール、環境変数、ネットワーク、ほかのプログラム（`std.fs`、`std.console`、`std.env`、`std.http`、`std.process`、およびパスのための `std.path`）が、この仕組みの上に作られています。`Fs` と `ReadOnlyFs` は根のディレクトリを持ち、すべてのパスは、根の外に出られないように正規化されます。根から出るパスは `Denied` です。標準ライブラリが内部で使う関数（`std.sys.request`、`std.async.erase`、`std.async.reveal` など）は、ケイパビリティなしで資源に触れたり、値の型を変えたりできるので、プログラムから呼ぶと `E1306` です。ケイパビリティを取る `std.fs`、`std.env`、`std.http`、`std.console`、`std.process` などの関数を使います。
 
 ## 診断コード
 
@@ -235,4 +247,4 @@ pub fn make() -> fs.ReadOnlyFs {
 
 - 効果：[11 効果](11-effects.md)
 - 並行処理（タスクとリソース）：[18 並行処理](18-concurrency.md)
-- 標準ライブラリ：[std.fs](../stdlib/fs.md)、[std.console](../stdlib/console.md)、[std.sim](../stdlib/sim.md)
+- 標準ライブラリ：[std.fs](../stdlib/fs.md)、[std.console](../stdlib/console.md)、[std.http](../stdlib/http.md)、[std.process](../stdlib/process.md)、[std.sim](../stdlib/sim.md)

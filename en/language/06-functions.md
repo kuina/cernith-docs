@@ -110,14 +110,14 @@ pub fn first<T>(items: List<T>) -> Option<T>
 pub record Box<T> { item: T, }
 ```
 
-To restrict the types that a type parameter can take, a **bound** can be attached. There are only two bounds, `Eq` and `Ord`, and users cannot define their own.
+To restrict the types that a type parameter can take, a **bound** can be attached. A bound is `Eq`, `Ord`, or an **interface** that the program declares ([22 Interfaces](22-interfaces.md)). A type parameter can have several bounds, joined by `+`: `<K: Ord + show.Show>`. `Eq` and `Ord` are fixed; a program cannot implement them for its own types.
 
-| Bound | Operations available | Types that satisfy it |
+| Fixed bound | Operations available | Types that satisfy it |
 | --- | --- | --- |
 | `Eq` | `==`, `!=` | See “Equality and ordering” in [03 Types](03-types.md) |
 | `Ord` | `<`, `<=`, `>`, `>=` in addition to `Eq`. Can also be a `Map` key or a `Set` element | Same as above |
 
-Neither `==` nor `<` can be used on a value of a type parameter without a bound; doing so is `E0316`. Passing a type that does not satisfy the bound is also `E0316` (the check happens after the type arguments are determined, so the message names the concrete type). A bound name other than `Eq` or `Ord` is `E0318`.
+Neither `==` nor `<` can be used on a value of a type parameter without a bound; doing so is `E0316`. Passing a type that does not satisfy the bound is also `E0316` (the check happens after the type arguments are determined, so the message names the concrete type). A bound name that is not `Eq`, `Ord`, or an interface in scope is `E0318`. An interface bound that a type does not satisfy (the type has no `impl`) is `E0316` as well.
 
 ```cernith
 module guide.generics;
@@ -140,6 +140,27 @@ pub fn unbox<T>(box: Box<T>) -> T {
 
 example unbox_returns_the_item for unbox {
   unbox(box: Box(item: 3)) == 3
+}
+```
+
+With an interface bound, the methods of the interface can be called on the value. The following function needs both `Ord` (for `<`) and `Show` (for `show.text`).
+
+```cernith
+module guide.bounds;
+
+import std.show;
+
+pub fn smaller_text<K: Ord + show.Show>(first: K, second: K) -> String {
+  if first < second {
+    show.text(value: first)
+  } else {
+    show.text(value: second)
+  }
+}
+
+example smaller_text_writes_the_smaller for smaller_text {
+  smaller_text(first: 3, second: 2) == "2"
+    and smaller_text(first: "a", second: "b") == "\"a\""
 }
 ```
 

@@ -30,7 +30,7 @@ Things whose order carries meaning are not reordered by formatting: record field
 4. Comments before the `module` line go at the top, with no blank line between them and `module`.
 5. The order is: the `module` line, a blank line, the `import`s (sorted by path, then by alias, with no blank lines between them), a blank line, and the definitions. A file without `import` has one blank line after `module`.
 6. Definitions form three groups, in this order. Definitions are separated by one blank line.
-   1. **Types**: `type`, `record`, `variant`, `resource`, `capability`, `manifest`. In name order, regardless of kind.
+   1. **Types**: `type`, `record`, `variant`, `resource`, `capability`, `manifest`, `interface`, `unit`. In name order, regardless of kind. The `impl` declarations come after them, in this group, sorted by the text of the interface and then of the type.
    2. **Constants**. In name order.
    3. **Functions**: all ordinary `fn`, `spec fn`, and foreign functions. In name order. Immediately after each function go its `example` declarations (in name order), then its `property` declarations (in name order).
 
@@ -65,6 +65,13 @@ Things whose order carries meaning are not reordered by formatting: record field
 
 19. Comments are `//` line comments. The characters after `//`, including trailing spaces, are kept as they are. A comment after code moves to the line before the element that follows.
 20. A comment belongs to the element that follows it (a definition, an `import`, a statement, a clause, a field, a case, or a `match` case) and moves together with it, at its indentation. A comment before a closing bracket stays at the end of the block, and a comment after the last definition stays at the end of the file. Comments in other positions (in the middle of an expression or of a parameter list) are errors. Comments have no meaning.
+
+### Interfaces and patterns
+
+21. An `interface` is laid out like a record: one member per line, indented. Method signatures follow one another without blank lines, and a blank line separates a `law` from the member before and after it. A signature that does not fit is broken like a function header. A `law` is laid out like a `property`.
+22. An `impl` with methods has its functions indented, one block each, separated by blank lines. An `impl` that derives is one line (`impl show.Show for Point derive;`). An `impl` with no methods is `{}`.
+23. A bound list is written `A + B`, one space on each side of `+`, in the order written: the order is the order of the instance parameters, so it is part of the meaning.
+24. The alternatives of an or-pattern are joined by ` | ` in the order written. The formatter does not reorder them: only the checker knows the declaration order of the cases, and it rejects another order (`E0351`).
 
 ## Example
 

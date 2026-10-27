@@ -77,6 +77,8 @@ The command of the implementation is `cernith`. Only the minimum needed in this 
 | `cernith test file` | Runs the `example`s and `property`s. Exits with 0 if all of them pass |
 | `cernith run file` | Runs `main` |
 | `cernith fmt file` | Rewrites the file into canonical form ([19 Canonical form](19-canonical-form.md)) |
+| `cernith api [module] [--root folder]` | Prints the public interface of the modules in the folder (the current folder by default) without the bodies: for each public definition, the comment lines above it, its head, its `requires` and `ensures`, and the first example that names it. `--format json` gives JSON. Exits with 2 if nothing is printed |
+| `cernith eval file 'expression'` | Evaluates an expression in the scope of the module of the file and prints its type and value as JSON. Exits with 0 for a value, 1 if the expression does not check, 70 for a defect, and 71 if the step budget is used up |
 
 By default, diagnostics are output as JSON. With `--format compact`, each diagnostic takes one line.
 
@@ -94,6 +96,31 @@ passed   example  guide.first.keeps_inside
 passed   property guide.first.result_in_range
 3 tests: 3 passed
 ```
+
+`cernith eval` shows what a call gives without writing an `example`. It uses the module of the first program above, saved as `first.cnth`.
+
+```text
+$ cernith eval first.cnth 'clamp(value: 12, low: 0, high: 9)'
+{
+  "ok": true,
+  "schema": "cernith-eval/0.1",
+  "steps": 24,
+  "type": "Int",
+  "value": "9"
+}
+```
+
+The expression must be pure. All the names of the module, including private ones, can be used. With `--session`, `eval` reads one line at a time from standard input (an expression, `let name = expression`, or `import module`) and prints one JSON line for each.
+
+Other commands, one line each:
+
+| Command | What it does |
+| --- | --- |
+| `cernith profile file` | Runs `main` on the reference interpreter and counts the calls, evaluation steps, and allocations of each function. The counts are the same on every run. `--tests` profiles the tests instead, and `--format table` prints a table |
+| `cernith debug file` | Records one run of `main` and then answers questions read from standard input, one JSON line each (`summary`, `stack`, `locals`, `find-call`, `first-where`, `step`, and so on) |
+| `cernith lsp` | A language server for editors (LSP 3.17) on standard input and output: diagnostics, quick fixes, hover, definition, references, symbols, formatting, and rename |
+| `cernith graph folder` | Prints, as JSON, the files and dependencies of a package and the fingerprint of its interface, for build tools |
+| `cernith outline [module]`, `cernith show module::name` | List the definitions of a package with their addresses and hashes, and print one definition (JSON). The kinds include `interface`, `impl`, and `manifest` |
 
 ## What to read next
 

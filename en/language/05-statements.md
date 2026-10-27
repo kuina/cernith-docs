@@ -193,9 +193,70 @@ for i in a..b { ... }       // from a up to but excluding b
 for i in a..=b { ... }      // from a to b inclusive
 ```
 
-`for` traverses the elements of a list, or a range of `Int`s (a range whose end is not after its start, such as `1..0`, is empty), in order, and gives a name to each element (`_` can also be written, and so can a pattern that always matches, such as a record pattern `Point(x: a, y: b)`; a pattern that might not match is `E0305`). Both lists and ranges are finite, so a `for` always ends and needs no justification for termination. A `Map` is traversed through the list of `entries` in `std.map`. A `String` cannot be traversed directly; turn it into a `List<String>` with `text.chars`.
+`for` traverses the elements of a list, or a range of `Int`s (a range whose end is not after its start, such as `1..0`, is empty), in order, and gives a name to each element (`_` can also be written, and so can a pattern that always matches, such as a record pattern `Point(x: a, y: b)`; a pattern that might not match is `E0305`). Lists and ranges are finite, so a `for` over them always ends and needs no justification for termination. A `Map` is traversed through the list of `entries` in `std.map`. A `String` cannot be traversed directly; turn it into a `List<String>` with `text.chars`.
 
 For an element that is not used, make the name `_`.
+
+A `std.seq.Seq` can be traversed too ([std.seq](../stdlib/seq.md)). A `Seq` is lazy and has a `bound`, an upper bound on its length. The loop takes one step of the sequence per turn and takes at most `bound` turns, so it ends without a justification, and an early `return` stops the rest from being computed.
+
+```text
+for name in seq { ... }     // at most seq.bound turns
+```
+
+A `for` over a `Seq` takes no `invariant` or `decreases` clause (`E1406`): the body cannot name the hidden cursor, and the bound is the measure. Loop over a list or a range if the loop needs a clause.
+
+```cernith
+module guide.seq_loops;
+
+import std.seq;
+
+pub fn first_above(limit: Int) -> Option<Int> {
+  for number in seq.iterate(
+    seed: 1,
+    next: fn(value: Int) -> Int {
+      value * 2
+    },
+    bound: 1000,
+  ) {
+    if number > limit {
+      return Some(value: number);
+    }
+  }
+  None
+}
+
+example first_above_stops_early for first_above {
+  first_above(limit: 100) == Some(value: 128)
+}
+
+pub fn sum_of_squares(count: Int) -> Int {
+  var total: Int = 0;
+  for number in seq.range(from: 1, to: count + 1) {
+    total = total + number * number;
+  }
+  total
+}
+
+example sum_of_squares_adds_up for sum_of_squares {
+  sum_of_squares(count: 3) == 14 and sum_of_squares(count: 0) == 0
+}
+```
+
+```cernith-error E1406
+module guide.seq_loops;
+
+import std.seq;
+
+pub fn total() -> Int {
+  var total: Int = 0;
+  for number in seq.range(from: 0, to: 3) {
+    invariant total >= 0;
+
+    total = total + number;
+  }
+  total
+}
+```
 
 ### while
 

@@ -196,6 +196,135 @@ example three_is_three for three {
 }
 ```
 
+## 型パラメータとタグ
+
+どちらの形も、レコードと同じように、境界つきの型パラメータを取れます（[06 関数](06-functions.md)）。
+
+```text
+type Id<T> = distinct Int;
+type Stack<T> = distinct List<T>;
+type NonEmpty<T> = List<T> where self.length > 0;
+```
+
+- 使う場所の型引数での土台の型は、土台の型のパラメータを置き換えたものです。`Stack<Int>.value` は `List<Int>` で、`NonEmpty<Int>` は `List<Int>` の制約付き型です。
+- 土台の型に現れないパラメータは**タグ**です。`Id<Enemy>` と `Id<Bullet>` は、どちらも `Int` を持ちますが、別の型です（`E0303`）。タグの実行時のコストはありません。
+- コンストラクタの型引数は、期待される型から決まります。`Id<Enemy>` が期待される場所では、`Id(value: 7)` は `Id<Enemy>` です。何も決めない場所では、`::<>` で書きます。`Id::<Enemy>(value: 1)` のようにします。そうでなければ、エラー `E0320` です。
+- 条件は、パラメータに触れても構いません。宣言が必要とする境界は、パラメータに書きます（`Keyed<K: Ord>`）。境界を満たさない引数は `E0316` です。
+- 制約付きのリストは、土台と同じように添字で読めます（`items[0]`）。`NonEmpty.check(value: ...)` も、ほかの制約付き型と同じように使えます。これまでどおり、`NonEmpty<Int>` は `List<Int>` のサブタイプです。
+
+```cernith
+module guide.tags;
+
+pub record Bullet {
+  damage: Int,
+}
+
+pub record Enemy {
+  hp: Int,
+}
+
+pub type Id<T> = distinct Int;
+
+pub type NonEmpty<T> = List<T> where self.length > 0;
+
+pub type Stack<T> = distinct List<T>;
+
+pub fn as_list(items: NonEmpty<Int>) -> List<Int> {
+  items
+}
+
+example as_list_keeps_the_elements for as_list {
+  as_list(items: NonEmpty(value: [1, 2])) == [1, 2]
+}
+
+pub fn bullet_number() -> Int {
+  Id::<Bullet>(value: 1).value
+}
+
+example bullet_number_reads_the_number for bullet_number {
+  bullet_number() == 1
+}
+
+pub fn depth(stack: Stack<Int>) -> Int {
+  stack.value.length
+}
+
+example depth_reads_the_list for depth {
+  depth(stack: Stack(value: [1, 2, 3])) == 3
+}
+
+pub fn first_or(items: List<Int>, fallback: Int) -> Int {
+  match NonEmpty.check(value: items) {
+    Some(value: found) => found[0],
+    None => fallback,
+  }
+}
+
+example first_or_checks_the_length for first_or {
+  first_or(items: [4, 5], fallback: 0) == 4
+    and first_or(items: [], fallback: 9) == 9
+}
+
+pub fn next_enemy(id: Id<Enemy>) -> Id<Enemy> {
+  Id(value: id.value + 1)
+}
+
+example next_enemy_adds_one for next_enemy {
+  next_enemy(id: Id(value: 7)).value == 8
+}
+
+pub fn same_enemy(first: Id<Enemy>, second: Id<Enemy>) -> Bool {
+  first == second
+}
+
+example same_enemy_compares_numbers for same_enemy {
+  same_enemy(first: Id(value: 1), second: Id(value: 1))
+    and not same_enemy(first: Id(value: 1), second: Id(value: 2))
+}
+```
+
+```cernith-error E0303
+module guide.tags;
+
+pub record Bullet {
+  damage: Int,
+}
+
+pub record Enemy {
+  hp: Int,
+}
+
+pub type Id<T> = distinct Int;
+
+pub fn to_bullet(id: Id<Enemy>) -> Id<Bullet> {
+  id
+}
+```
+
+```cernith-error E0320
+module guide.tags;
+
+pub type Id<T> = distinct Int;
+
+pub fn number() -> Int {
+  Id(value: 1).value
+}
+```
+
+```cernith-error E0316
+module guide.tags;
+
+pub record Box {
+  count: Int,
+}
+
+pub type Keyed<K: Ord> = distinct List<K>;
+
+pub fn size(keys: Keyed<Box>) -> Int {
+  0
+}
+```
+
 ## サブタイプ
 
 Cernith のサブタイプ関係は、1 つの規則だけでできています。**制約付き型は、その土台の型のサブタイプです**（`Percent` は `Int` のサブタイプ、推移的に、制約付き型を土台にした制約付き型も）。

@@ -151,14 +151,14 @@ implies forall exists true false self effect resource release using
 await capability manifest
 ```
 
-`unit` is a reserved word that has no function in the current version. `self` can be written only inside the `where` clause of a type ([09 Contracts](09-contracts.md)). `async` and `scope` are not keywords. `async` is used as the name of an effect (`uses async`), and `scope` as the name of a function in `std.async` ([18 Concurrency](18-concurrency.md)).
+`unit` declares a unit of measure ([23 Units of measure](23-units-of-measure.md)). `interface`, `impl`, `law`, and `derive` are not keywords; they have a meaning only where an item, an interface member, or the end of an `impl` header is expected. `self` can be written only inside the `where` clause of a type ([09 Contracts](09-contracts.md)). `async` and `scope` are not keywords. `async` is used as the name of an effect (`uses async`), and `scope` as the name of a function in `std.async` ([18 Concurrency](18-concurrency.md)).
 
 `result` is not a keyword either. It denotes the return value of the function only inside an `ensures` clause. Anywhere else it is an ordinary name (a local variable may be called `result`; however, `result` inside an `ensures` clause is always the return value).
 
 ## Symbols
 
 ```text
-( ) [ ] { } , : ; . .. ..= :: -> => = == != < <= > >= ++ + - * / ?
+( ) [ ] { } , : ; . .. ..= :: -> => = == != < <= > >= ++ + - * / ? | ^
 ```
 
 If a `>` that closes type arguments is immediately followed by `=`, the two are read as `>=`. Put a space between `>` and `=`, as in `var xs: List<Int> = [];`. In canonical form, a space is always inserted.

@@ -201,12 +201,125 @@ pub fn go(light: Light) -> Bool {
 }
 ```
 
+### Or-patterns
+
+Alternatives joined by `|` share one arm and one body. An or-pattern can be the pattern of an arm or the pattern of a field inside a constructor pattern (`Some(value: Light.Red | Light.Yellow)`). The following rules apply.
+
+- Every alternative binds the same names, each at the same type. A name that one alternative lacks or adds is `E0350`; a name with a different type in another alternative is `E0301`. The body sees each name once.
+- An alternative is a literal or a case. `_` and a bare name match every value and would leave the other alternatives dead, so they are `E0351`.
+- The alternatives are written in strictly increasing order: literals by value (`false` before `true`), cases in the order of the declaration of the type (`Red` before `Yellow`; `Some` before `None`; `Ok` before `Err`). A repeated alternative and a wrong order are `E0351`, and the message gives the order.
+- The exhaustiveness check takes each alternative as one row.
+- There are no pattern guards (`if` in an arm), and a `for` head takes no alternatives.
+
+```cernith
+module guide.or_patterns;
+
+pub variant Light {
+  Red,
+  Yellow,
+  Green,
+}
+
+pub variant Shape {
+  Circle(radius: Int),
+  Square(side: Int),
+  Dot,
+}
+
+pub fn is_small(number: Int) -> Bool {
+  match number {
+    -1 | 0 | 1 => true,
+    _ => false,
+  }
+}
+
+example is_small_takes_literals for is_small {
+  is_small(number: 0) and is_small(number: -1) and not is_small(number: 2)
+}
+
+pub fn must_stop(light: Light) -> Bool {
+  match light {
+    Light.Red | Light.Yellow => true,
+    Light.Green => false,
+  }
+}
+
+example must_stop_joins_two_cases for must_stop {
+  must_stop(light: Light.Red)
+    and must_stop(light: Light.Yellow)
+    and not must_stop(light: Light.Green)
+}
+
+pub fn size(shape: Shape) -> Int {
+  match shape {
+    Shape.Circle(radius: n) | Shape.Square(side: n) => n,
+    Shape.Dot => 0,
+  }
+}
+
+example size_binds_the_same_name for size {
+  size(shape: Shape.Circle(radius: 3)) == 3
+    and size(shape: Shape.Square(side: 4)) == 4
+    and size(shape: Shape.Dot) == 0
+}
+
+pub fn stop_in_option(light: Option<Light>) -> Bool {
+  match light {
+    Some(value: Light.Red | Light.Yellow) => true,
+    Some(value: Light.Green) => false,
+    None => false,
+  }
+}
+
+example stop_in_option_uses_a_field_pattern for stop_in_option {
+  stop_in_option(light: Some(value: Light.Yellow))
+    and not stop_in_option(light: None)
+}
+```
+
+`Shape.Dot` binds no name, so it cannot be joined with `Shape.Circle(radius: n)` (`E0350`).
+
+```cernith-error E0350
+module guide.or_patterns;
+
+pub variant Shape {
+  Circle(radius: Int),
+  Dot,
+}
+
+pub fn size(shape: Shape) -> Int {
+  match shape {
+    Shape.Circle(radius: n) | Shape.Dot => n,
+  }
+}
+```
+
+The alternatives must follow the declaration. Here `Light.Yellow` is written before `Light.Red`.
+
+```cernith-error E0351
+module guide.or_patterns;
+
+pub variant Light {
+  Red,
+  Yellow,
+  Green,
+}
+
+pub fn must_stop(light: Light) -> Bool {
+  match light {
+    Light.Yellow | Light.Red => true,
+    Light.Green => false,
+  }
+}
+```
+
 ## Exhaustiveness
 
 A `match` must cover all values of the scrutinee. If it does not, the error is `E0305` (non-exhaustive-match), and the diagnostic shows one example of an uncovered value, in the way it would be written in source (`Light.Yellow`, `Some(value: false)`).
 
 - Variants, records, `Bool`, `Option`, and `Result` are checked completely, regardless of the depth of nesting.
 - Literals of `Int` and `String` cannot cover the whole type. A `match` with only literal patterns needs a `_` or a name case.
+- Each alternative of an or-pattern counts as one row. `Light.Red | Light.Yellow` alone does not cover `Light.Green` (`E0305`).
 
 There is no treatment in which an uncovered case fails at run time; it is rejected at compile time (check time). As a result, when a case is added to a variant, every place that matches on that variant is found by the check.
 

@@ -190,7 +190,7 @@ pub fn pair() -> Int {
 | `==`, `!=` (bound `Eq`) | `Int`, `Float64`, `String`, `Bool`, `Unit`, and `List`, `Option`, `Result`, records, and variants whose elements satisfy these |
 | `<` and so on (bound `Ord`) | `Int`, `Float64`, `String`, `Bool` |
 
-Function types have neither. `List`, `Option`, `Result`, records, and variants have no magnitude comparison. Using one is error `E0316`. Bounds are also used in generic functions ([06 Functions](06-functions.md)).
+Function types have neither. `List`, `Option`, `Result`, records, and variants have no magnitude comparison. Using one is error `E0316`. `Eq` and `Ord` are fixed: a program cannot implement them for its own types. Bounds are also used in generic functions ([06 Functions](06-functions.md)), and a program can declare bounds of its own, called interfaces ([22 Interfaces](22-interfaces.md)).
 
 ```cernith-error E0316
 module guide.ordering;

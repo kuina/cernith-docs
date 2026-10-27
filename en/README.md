@@ -63,6 +63,8 @@ example clamps_high for clamp {
 | [19 Canonical form](language/19-canonical-form.md) | The rules of the format |
 | [20 Diagnostic codes](language/20-diagnostics.md) | A list of the codes the checker reports |
 | [21 Grammar](language/21-grammar.md) | The definition of the syntax and operator precedence |
+| [22 Interfaces](language/22-interfaces.md) | `interface`, `impl`, bounds, laws, `derive` |
+| [23 Units of measure](language/23-units-of-measure.md) | `unit`, quantity types such as `Float64<m / s>`, and the errors that keep units apart |
 
 ### Standard library ([stdlib/](stdlib/))
 

@@ -196,6 +196,130 @@ test.with_world(
 
 テストの実行中は、すべての契約の節が検査されます。呼ばれた関数の中の節も含みます。違反すると、テストが欠陥で止まります（事前条件は責任が呼び出し側、事後条件は呼ばれた関数）。実行できない節（型全体を動く量化子）は、失敗ではなく、飛ばされます。実行されて、すべてのテストで成り立ったが証明されていない節は、`tested-only` の状態です（[10 証明義務と保証レベル](10-verification.md)）。
 
+## 一部のテストの実行と、テストが見逃すもの
+
+`cernith test --only テキスト` は、名前、対象の関数、または `module.name` に `テキスト`（大文字と小文字を区別します）を含むテストだけを実行します。1 つの関数のテストを実行するには、その関数の名前を指定します。一致するテストがなければ、標準エラー出力にそう出力して `2` で終了します。名前の打ち間違いが「すべて通った」と受け取られないようにするためです。
+
+`--coverage` と `--mutate` は、テストが取りこぼしているものを示します。次のモジュールには、どのテストも呼ばない関数と、最後の分岐をどの example も通らない `if` があります。
+
+```cernith
+module guide.coverage;
+
+pub fn double(value: Int) -> Int {
+  value * 2
+}
+
+example double_of_three for double {
+  double(value: 3) == 6
+}
+
+pub fn sign(value: Int) -> Int {
+  if value > 0 {
+    1
+  } else if value < 0 {
+    -1
+  } else {
+    0
+  }
+}
+
+example sign_of_negative for sign {
+  sign(value: -5) == -1
+}
+
+example sign_of_positive for sign {
+  sign(value: 5) == 1
+}
+
+pub fn unused(value: Int) -> Int {
+  value + 1
+}
+```
+
+`--coverage` は、要約と、どのテストも到達しなかった場所（呼ばれなかった関数、`if` の分岐、`match` の腕、評価されなかった契約の節）を追加します。`coverage.cnth` として保存した場合の出力です。
+
+```text
+$ cernith test --coverage coverage.cnth
+passed   example  guide.coverage.double_of_three
+passed   example  guide.coverage.sign_of_negative
+passed   example  guide.coverage.sign_of_positive
+3 tests: 3 passed
+functions    2/3 (66.7%)
+if branches  3/4 (75.0%)
+match arms   0/0
+clauses      0/0
+  coverage.cnth:14:10 if-branch sign: the `else` branch of `if value < 0` never ran
+  coverage.cnth:29:1 function unused: no test calls it
+```
+
+`--mutate` は、テストを実行し、すべて通れば、テスト対象のコードに小さな変更（ミュータント）を 1 つずつ加えて、変更した場所に到達するテストだけをもう一度実行します。テストが失敗するようになるミュータントは**殺された**（killed）ミュータントです。どのテストも気づかないミュータントは**生き残った**（survived）ミュータントで、example が足りないことを示します（ここでは `sign(value: 0)`）。
+
+```text
+$ cernith test --mutate coverage.cnth
+passed   example  guide.coverage.double_of_three
+passed   example  guide.coverage.sign_of_negative
+passed   example  guide.coverage.sign_of_positive
+3 tests: 3 passed
+mutants 9 of 12 run: 5 killed, 4 survived, 3 unreached, score 55.6%
+  SURVIVED coverage.cnth:12:6 sign: `>` becomes `>=` in `value > 0`
+  SURVIVED coverage.cnth:12:14 sign: the constant 0 becomes 1
+  SURVIVED coverage.cnth:14:13 sign: `<` becomes `<=` in `value < 0`
+  SURVIVED coverage.cnth:14:21 sign: the constant 0 becomes 1
+```
+
+- 加える変更は、比較の入れ替え（`==` と `!=`、`<` と `<=`、`>` と `>=`）、算術の入れ替え（`+` と `-`、`*` を `+` に）、整数定数に 1 を足す変更、`if` の 2 つの分岐の入れ替え、隣り合う 2 つの `match` の腕の入れ替え、`requires`・`ensures`・ループの `invariant` を 1 つ取り除く変更です。
+- 変更した場所をどのテストも実行しないミュータントは**到達しなかった**（unreached）ミュータントです。スコアは `killed / (killed + survived)` です。
+- 生き残ったミュータントは、example が足りない証拠であって、証明ではありません。意味を変えない変更（`x + 0` など）は、いつまでも生き残ります。ミュータントは均等に選ばれ、実行は再現できます。`--mutants N` は実行する数の上限（既定 200）、`--mutation-cases N` はプロパティごとのケース数（既定 20）、`--min-score PERCENT` は、スコアがそれを下回ると終了ステータスを `1` にします。
+- `--json` を付けると、文書には `coverage`（`cernith-coverage/0.1`）か `mutation`（`cernith-mutation/0.1`）のキーが加わります。
+
+## インターフェースの法則
+
+インターフェースの `law`（法則）は、そのインターフェースの `impl`（実装）のうち、型パラメータを持たないものそれぞれに対して、テストとして実行されます（[22 インターフェース](22-interfaces.md)）。テストランナーは、法則を `impl` の型で具体化し、`property` と同じように、生成した値で実行します。名前は `law_<インターフェース>_<法則>_for_<型>` で、`--only` で選べます。失敗したケースは、法則と `impl` の名前と反例を示します。次のモジュールでは、法則 `not_negative` は `Square`（フィールドが `where` で制限されています）では成り立ち、`Strip`（制限されていません）では成り立ちません。
+
+```cernith-snippet
+module guide.testing_laws;
+
+pub interface Area {
+  fn area(shape: Self) -> Int;
+
+  law not_negative(shape: Self) {
+    area(shape: shape) >= 0
+  }
+}
+
+pub record Square {
+  side: Int,
+} where side >= 0;
+
+pub record Strip {
+  length: Int,
+  width: Int,
+}
+
+impl Area for Square {
+  fn area(shape: Square) -> Int {
+    shape.side * shape.side
+  }
+}
+
+impl Area for Strip {
+  fn area(shape: Strip) -> Int {
+    shape.length * shape.width
+  }
+}
+```
+
+テストの出力は次のとおりです（`area.cnth` として保存した場合）。
+
+```text
+$ cernith test --only law_ area.cnth
+passed   property guide.testing_laws.law_Area_not_negative_for_Square
+failed   property guide.testing_laws.law_Area_not_negative_for_Strip  counterexample: shape: Strip(length: -1, width: 1)
+2 tests: 1 passed, 1 failed
+```
+
+検証器は法則の証明を試みません。ある `impl` について偽になる法則は、その `impl` の欠陥です。
+
 ## 結果と終了ステータス
 
 `cernith test` は、テストごとに 1 行を出力します。`--json` を付けると、`cernith-test-results` の JSON になります。
@@ -220,9 +344,12 @@ error    example  guide.c.never_ends  resource-exhausted:
 | `--seed N` | グローバルな種（既定 0） |
 | `--cases N` | プロパティの通るケース数（既定 100） |
 | `--budget N` | example とプロパティの各ケースのステップ数 |
+| `--only テキスト` | 名前、対象の関数、`module.name` に `テキスト` を含むテストだけを実行する |
+| `--coverage` | どのテストも到達しなかった関数、分岐、腕、契約の節も報告する |
+| `--mutate` | テスト対象のコードに小さな変更を加えて、どのテストも気づかないものを一覧する |
 | `--json` | JSON で出力する |
 
-終了ステータスは、すべて通れば `0`、失敗か `gave-up` があれば `1`、プログラムが型検査を通らないか、`error` のテストがあれば `2` です。テストは、エラーなく検査を通るプログラムに対してだけ実行されます。
+終了ステータスは、すべて通れば `0`、失敗か `gave-up` があれば `1`、プログラムが型検査を通らないか、`error` のテストがあるか、`--only` がどのテストにも一致しなければ `2` です。テストは、エラーなく検査を通るプログラムに対してだけ実行されます。
 
 ## 診断コード
 

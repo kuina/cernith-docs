@@ -193,9 +193,70 @@ for i in a..b { ... }       // a 以上 b 未満
 for i in a..=b { ... }      // a 以上 b 以下
 ```
 
-`for` は、リストの要素、または `Int` の範囲（`1..0` のように終わりが始めより後ろにない範囲は空です）を順にたどり、各要素に名前を付けます（`_` も書けます。レコードのパターン `Point(x: a, y: b)` のように必ず一致するパターンも書けます。一致しないことがありうるパターンは `E0305` です）。リストも範囲も有限なので、`for` は必ず終わり、停止性の根拠は要りません。`Map` は、`std.map` の `entries` のリストをたどります。`String` は直接たどれません。`text.chars` で `List<String>` にします。
+`for` は、リストの要素、または `Int` の範囲（`1..0` のように終わりが始めより後ろにない範囲は空です）を順にたどり、各要素に名前を付けます（`_` も書けます。レコードのパターン `Point(x: a, y: b)` のように必ず一致するパターンも書けます。一致しないことがありうるパターンは `E0305` です）。リストと範囲は有限なので、それらに対する `for` は必ず終わり、停止性の根拠は要りません。`Map` は、`std.map` の `entries` のリストをたどります。`String` は直接たどれません。`text.chars` で `List<String>` にします。
 
 使わない要素は、名前を `_` にします。
+
+`std.seq.Seq` もたどれます（[std.seq](../stdlib/seq.md)）。`Seq` は遅延評価で、長さの上限 `bound` を持ちます。ループは 1 回ごとに列の 1 ステップを進め、最大で `bound` 回だけ繰り返します。そのため、根拠なしに必ず終わり、途中で `return` すれば残りは計算されません。
+
+```text
+for 名前 in seq { ... }     // 最大で seq.bound 回
+```
+
+`Seq` に対する `for` は、`invariant` 節も `decreases` 節も取れません（`E1406`）。本体からは隠れたカーソルの名前を書けず、`bound` が尺度になるためです。節が必要なループは、リストか範囲に対して書きます。
+
+```cernith
+module guide.seq_loops;
+
+import std.seq;
+
+pub fn first_above(limit: Int) -> Option<Int> {
+  for number in seq.iterate(
+    seed: 1,
+    next: fn(value: Int) -> Int {
+      value * 2
+    },
+    bound: 1000,
+  ) {
+    if number > limit {
+      return Some(value: number);
+    }
+  }
+  None
+}
+
+example first_above_stops_early for first_above {
+  first_above(limit: 100) == Some(value: 128)
+}
+
+pub fn sum_of_squares(count: Int) -> Int {
+  var total: Int = 0;
+  for number in seq.range(from: 1, to: count + 1) {
+    total = total + number * number;
+  }
+  total
+}
+
+example sum_of_squares_adds_up for sum_of_squares {
+  sum_of_squares(count: 3) == 14 and sum_of_squares(count: 0) == 0
+}
+```
+
+```cernith-error E1406
+module guide.seq_loops;
+
+import std.seq;
+
+pub fn total() -> Int {
+  var total: Int = 0;
+  for number in seq.range(from: 0, to: 3) {
+    invariant total >= 0;
+
+    total = total + number;
+  }
+  total
+}
+```
 
 ### while
 

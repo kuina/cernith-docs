@@ -63,6 +63,8 @@ example clamps_high for clamp {
 | [19 正準形](language/19-canonical-form.md) | 書式の規則 |
 | [20 診断コード](language/20-diagnostics.md) | チェッカーが報告するコードの一覧 |
 | [21 文法](language/21-grammar.md) | 構文の定義と演算子の優先順位 |
+| [22 インターフェース](language/22-interfaces.md) | `interface`、`impl`、境界、法則、`derive` |
+| [23 単位](language/23-units-of-measure.md) | `unit`、`Float64<m / s>` のような量の型、単位を区別するエラー |
 
 ### 標準ライブラリ（[stdlib/](stdlib/)）
 

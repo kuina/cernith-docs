@@ -151,14 +151,14 @@ implies forall exists true false self effect resource release using
 await capability manifest
 ```
 
-`unit` は、今の版では何の機能も持たない予約語です。`self` は、型の `where` 節の中だけに書けます（[09 契約](09-contracts.md)）。`async` と `scope` はキーワードではありません。`async` は効果の名前（`uses async`）、`scope` は `std.async` の関数の名前として使われます（[18 並行処理](18-concurrency.md)）。
+`unit` は単位を宣言します（[23 単位](23-units-of-measure.md)）。`interface`、`impl`、`law`、`derive` はキーワードではありません。項目、インターフェースのメンバー、`impl` ヘッダーの末尾が期待される場所でだけ、意味を持ちます。`self` は、型の `where` 節の中だけに書けます（[09 契約](09-contracts.md)）。`async` と `scope` はキーワードではありません。`async` は効果の名前（`uses async`）、`scope` は `std.async` の関数の名前として使われます（[18 並行処理](18-concurrency.md)）。
 
 `result` もキーワードではありません。`ensures` 節の中でだけ、関数の戻り値を表します。それ以外の場所では、普通の名前です（局所変数を `result` と呼んでも構いません。ただし `ensures` 節の中の `result` は、常に戻り値です）。
 
 ## 記号
 
 ```text
-( ) [ ] { } , : ; . .. ..= :: -> => = == != < <= > >= ++ + - * / ?
+( ) [ ] { } , : ; . .. ..= :: -> => = == != < <= > >= ++ + - * / ? | ^
 ```
 
 `>` が型引数を閉じ、直後に `=` が続くと、`>=` と読まれます。`var xs: List<Int> = [];` のように、`>` と `=` の間に空白を置いてください。正準形では、常に空白が入ります。
