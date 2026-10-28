@@ -1,8 +1,8 @@
 # std.sim
 
-A module that creates a **simulated world** holding files, environment variables, and network responses, and runs a function inside it. Write `import std.sim;` and call functions such as `sim.with_sim(...)` and `sim.file(...)`. It never touches files or networks outside the world.
+This module runs functions in a **simulated world** containing files, environment variables, and network responses. Import it with `import std.sim;` and call functions such as `sim.with_sim(...)` and `sim.file(...)`. Operations stay inside the simulated world and never access external files or networks.
 
-The functions of [fs](fs.md), [env](env.md), [http](http.md), [console](console.md), and [process](process.md) query the world through a capability. In tests, use a test capability such as `fs.simulated()` to make the simulated world the party that answers those queries. The world of `std.test.with_world` ([test](test.md)) holds only the lines of standard input, the clock, and randomness. For a test that needs a world with files, environment variables, and a network as well, use `sim.with_sim`.
+The functions in [fs](fs.md), [env](env.md), [http](http.md), [console](console.md), and [process](process.md) interact with the world through capabilities. In tests, capabilities such as `fs.simulated()` direct these operations to the simulated world. Use `sim.with_sim` when a test needs files, environment variables, or network responses in addition to the input lines, clock, and randomness provided by `std.test.with_world` ([test](test.md)).
 
 The flow has three steps.
 
@@ -521,7 +521,7 @@ example stored_picture_size_reads_a_file_set_up_as_bytes for stored_picture_size
 
 ### Scripts, terminals, and recorded requests
 
-The following module answers a command from a script, makes the world a terminal, and reads back what `send` sent.
+The following module scripts a command's response, simulates a terminal, and inspects requests sent with `send`.
 
 ```cernith
 module guide.sim_scripts;

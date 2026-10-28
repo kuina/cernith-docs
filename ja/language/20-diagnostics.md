@@ -1,8 +1,8 @@
 # 診断コード
 
-チェッカーが報告する診断は、**コード**（`E0304` のような 5 文字）、**名前**（`missing-argument-label` のような、コードに 1 対 1 に対応する名前）、メッセージ、場所を持ちます。コードの先頭の文字が `E` ならエラー、`W` なら警告です。エラーがあるとき、`cernith check` は 0 以外の終了コードで終わります。
+チェッカーの診断には、**コード**（`E0304` などの 5 文字）、コードごとに一意の**名前**（`missing-argument-label` など）、メッセージ、発生箇所が含まれます。コードが `E` で始まる場合はエラー、`W` で始まる場合は警告です。エラーがあると、`cernith check` は 0 以外の終了コードで終了します。
 
-このページは、言語の規則に関わるコードの一覧です。各コードの意味と、それを扱う章を示します。中間表現（`E09xx`）、編集 API（`E10xx`）、ホスト関数（`E1304`）のコードは載せていません。
+このページでは、言語の規則に関する診断コードを、意味と関連する章へのリンクとともに一覧にしています。中間表現（`E09xx`）、編集 API（`E10xx`）、ホスト関数（`E1304`）のコードは含みません。
 
 ```text
 file:line:col E0304 missing-argument-label: Arguments must be named: expected a, b. [fix (safe): Add the parameter names as labels.]
@@ -44,7 +44,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E0210` | import-cycle | モジュールが互いに `import` している（循環） | [14](14-modules-and-packages.md) |
 | `E0211` | constant-cycle | 定数が自分自身に依存している | [14](14-modules-and-packages.md) |
 | `E0215` | abstract-type | `distinct` 型を、定義したモジュールの外で構築・展開した | [08](08-refined-and-distinct-types.md) |
-| `E0216` | private-in-public | 公開された署名・フィールド・契約に、非公開の型や名前がある | [14](14-modules-and-packages.md)、[23](23-units-of-measure.md) |
+| `E0216` | private-in-public | 公開されたシグネチャ・フィールド・契約に、非公開の型や名前がある | [14](14-modules-and-packages.md)、[23](23-units-of-measure.md) |
 | `E0218` | module-path-mismatch | モジュール名がファイルのパスと一致しない | [14](14-modules-and-packages.md) |
 | `E0219` | reserved-module-name | `std` 以下のモジュール名を使った | [14](14-modules-and-packages.md) |
 | `E0224` | invalid-manifest | パッケージの `cernith.toml` が使えない | [14](14-modules-and-packages.md) |
@@ -77,8 +77,8 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E0302` | implicit-conversion | `Int` と `Float64` を混ぜた | [03](03-types.md)、[23](23-units-of-measure.md) |
 | `E0303` | incompatible-identities | `distinct` 型を、別の型の代わりに使った（または逆） | [08](08-refined-and-distinct-types.md) |
 | `E0304` | missing-argument-label | 呼び出しの引数にラベルがない | [04](04-expressions.md) |
-| `E0305` | non-exhaustive-match | `match` がすべての場合を覆っていない | [07](07-records-and-variants.md) |
-| `E0306` | unused-result | `Unit` でない値を黙って捨てた | [05](05-statements.md) |
+| `E0305` | non-exhaustive-match | `match` がすべての場合を網羅していない | [07](07-records-and-variants.md) |
+| `E0306` | unused-result | `Unit` でない値を暗黙に捨てた | [05](05-statements.md) |
 | `E0307` | unqualified-integer-division | `Int` どうしに `/` を使った | [03](03-types.md) |
 | `E0309` | error-type-mismatch | `?` で、エラーの型が合わない、または `Result`/`Option` を返さない関数で使った | [12](12-errors-and-defects.md) |
 | `E0310` | argument-labels-mismatch | ラベルが足りない、未知、または宣言の順序と違う（呼び出し、コンストラクタ、`with`、パターン） | [04](04-expressions.md) |
@@ -91,7 +91,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E0317` | no-such-field | 存在しないフィールド（制約付き型の `.value` を含む） | [07](07-records-and-variants.md) |
 | `E0318` | unknown-bound | `Eq`・`Ord` でも、見えているインターフェースでもない境界 | [06](06-functions.md)、[22](22-interfaces.md) |
 | `E0319` | not-a-value | 型やモジュールを値として使った | [04](04-expressions.md) |
-| `E0320` | cannot-infer | 引数も文脈も型を決めない | [06](06-functions.md)、[08](08-refined-and-distinct-types.md) |
+| `E0320` | cannot-infer | 引数や文脈から型を推論できない | [06](06-functions.md)、[08](08-refined-and-distinct-types.md) |
 | `E0321` | assign-to-non-var | `let` やパラメータに代入した | [05](05-statements.md) |
 | `E0322` | closure-captures-var | 関数式が、周りの関数の `var` を使った | [05](05-statements.md) |
 | `E0323` | let-has-type | `let` に型注釈を書いた | [05](05-statements.md) |
@@ -150,7 +150,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E1101` | resource-escapes-scope | リソース（第二級の値）を、戻した・格納した・コピーした・クロージャが取り込んだ、または呼び出しの引数以外の場所で使った | [17](17-resources-and-capabilities.md) |
 | `E1102` | release-error-not-covered | `using` の本体のエラー型が、取得・解放のエラー型と違う | [17](17-resources-and-capabilities.md) |
 | `E1103` | resource-outside-using | リソースの取得を `using` の外で束縛した | [17](17-resources-and-capabilities.md) |
-| `E1105` | bad-resource-declaration | リソースの `release` 関数がない、または署名が違う | [17](17-resources-and-capabilities.md) |
+| `E1105` | bad-resource-declaration | リソースの `release` 関数がない、またはシグネチャが違う | [17](17-resources-and-capabilities.md) |
 | `E1106` | resource-as-type-argument | リソース型を型引数やフィールドにした | [17](17-resources-and-capabilities.md) |
 | `E1107` | return-inside-using | `using` の本体の中で `return` した | [17](17-resources-and-capabilities.md) |
 | `E1301` | capability-outside-manifest | ケイパビリティを、`manifest` と定義モジュールの外で作った | [17](17-resources-and-capabilities.md) |

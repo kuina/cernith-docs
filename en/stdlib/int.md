@@ -1,6 +1,6 @@
 # std.int
 
-The module of functions for `Int` (integers with no limit on the number of digits). Write `import std.int;` and call a function as in `int.abs(value: x)`.
+This module provides operations on `Int`, Cernith's arbitrary-precision integer type. Import it with `import std.int;` and call functions such as `int.abs(value: x)`.
 
 The `+`, `-`, and `*` operators on `Int` never overflow. The division operator `/` can be used only on `Float64` values, so division and remainder on `Int` are written with `div_*` and `rem_*` from this module, choosing how the result is rounded ([03 Types](../language/03-types.md)). Bitwise operations and shifts are also functions of this module. Operations that overflow (wrap around) at 32 or 64 bits are in [word32 and word64](word32-word64.md).
 
@@ -68,13 +68,13 @@ The results for each combination of signs of `dividend` and `divisor` are as fol
 | 7 | -2 | -4 | -1 | -3 | 1 | -3 | 1 |
 | -7 | -2 | 3 | -1 | 3 | -1 | 4 | 1 |
 
-When `dividend` and `divisor` are both positive, the three ways of rounding make no difference. The difference appears when a negative number is involved. Which one to choose depends on what you want to do.
+All three rounding rules agree when both `dividend` and `divisor` are positive. They differ when negative numbers are involved, so choose the rule that fits the calculation:
 
 - When you want a position within a cycle (the hands of a clock, wrapping around an array index), use `rem_euclid`. It returns a value that is 0 or greater regardless of the sign of `divisor`.
 - When you count “how many intervals fit,” use `div_floor`. Even when `dividend` is on the negative side, the intervals line up with the same width.
 - When you want the same result as dividing the absolute values and then restoring the sign, use `div_trunc` and `rem_trunc`.
 
-The operator `/` is not available for `Int`, and the rounding is chosen by name like this, because the result of dividing negative numbers changes depending on how it is rounded.
+Because rounding affects division involving negative numbers, `Int` division requires a named function rather than the `/` operator.
 
 The precondition is common to the three quotients and the three remainders: `requires divisor != 0;`. A call where `divisor` is `0` is a defect.
 
@@ -95,7 +95,7 @@ pub fn rem_euclid(dividend: Int, divisor: Int) -> Int
 
 `bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right`, `test_bit`, and `low_bits` read an `Int` as an **infinite-width two’s complement** number. A nonnegative number is a bit string with 0 continuing endlessly in the upper positions. A negative number is a bit string with 1 continuing endlessly above the highest 0. For example, `-1` is the number whose bits are all 1, and `-8` is the number whose lowest three bits are 0 and whose bits above them are all 1.
 
-Because of this way of reading, there is no limit on the number of digits and the result is always exact. There is no wrapping around and no 64-bit limit.
+This representation keeps results exact at any width. There is no wraparound or 64-bit limit.
 
 - `bit_not(value)` is `-1 - value`. `bit_not(value: 5)` is `-6`, and `bit_not(value: -1)` is `0`.
 - `bit_and(first: -1, second: x)` is `x`, because `-1` has all bits set to 1.

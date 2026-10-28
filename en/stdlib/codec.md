@@ -1,8 +1,8 @@
 # std.codec
 
-This module provides the shape of data as formats see it, and the two interfaces that turn a value of a type into that shape and back: `Encode` and `Decode`. To use it, write `import std.codec;` and call the methods as `codec.encode(value: x)` and `codec.decode::<T>(value: v)`.
+This module provides a common data representation and two interfaces for converting to and from it: `Encode` and `Decode`. Import it with `import std.codec;` and call the methods as `codec.encode(value: x)` and `codec.decode::<T>(value: v)`.
 
-The shape is a `Value`. A format (a text format of a tool or library) converts a `Value` to and from its own text once. Every type that has an `Encode` and a `Decode` impl then has that format. `impl codec.Encode for T derive;` writes the impl for a record or a variant. Both interfaces are described in [22 Interfaces](../language/22-interfaces.md).
+The common representation is `Value`. A text format implemented by a tool or library needs only one conversion between its text and `Value`. Any type with `Encode` and `Decode` impls can then use that format. For records and variants, `impl codec.Encode for T derive;` generates the impl. Both interfaces are described in [22 Interfaces](../language/22-interfaces.md).
 
 ## Value
 
@@ -57,7 +57,7 @@ In `Decode`, `Self` occurs only in the result, so a call names the type: `codec.
 | `Ok(value: x)` and `Err(error: x)` | `Case` named `Ok` with the field `value`, and `Case` named `Err` with the field `error` |
 
 - `Some(value: None)` is encoded like `None`, so it cannot be told apart after decoding. A format that needs the difference can use a record.
-- A number does not widen. Decoding a `Float64` needs a `Float`, and an `Int` value is an error.
+- Numeric types are not converted automatically. Decoding a `Float64` requires a `Float`; an `Int` value produces an error.
 - Decoding an `Option<T>` gives `None` for `Null`, and `Some(value: x)` for any other value that decodes as a `T`.
 
 ## Derived impls
@@ -72,7 +72,7 @@ The derived `decode` reads each field by name and returns the first error. The `
 | An item has the wrong type | `.marks[1]` | `expected an Int, found a String` |
 | The case name is unknown | (empty) | `Shape has no case Circle` |
 
-A type that needs another shape writes the two methods itself. The example below does this for a `distinct` type, which has no derived impl. It writes a `Meters` as a plain `Int`.
+To use a different representation, implement both methods explicitly. The example below encodes a `Meters` value as a plain `Int`. `Meters` is a `distinct` type, for which impls cannot be derived.
 
 ## Function list
 

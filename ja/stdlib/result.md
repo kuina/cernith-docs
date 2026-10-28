@@ -1,8 +1,8 @@
 # std.result
 
-`Result<T, Fail>` を扱う関数のモジュールです。`Result<T, Fail>` は、成功（`Ok(value: x)`）か、失敗（`Err(error: e)`）かを表す型で、プレリュードにあります。このモジュールの関数を使うには、`import std.result;` と書き、`result.map(...)` のように呼びます。`Option<T>` の関数は [option](option.md) にあり、このページはその対になります。
+成功（`Ok(value: x)`）と失敗（`Err(error: e)`）を表す、プレリュードの型 `Result<T, Fail>` を操作するモジュールです。`import std.result;` で読み込み、`result.map(...)` のように呼び出します。`Option<T>` の同様の操作については、[option](option.md) を参照してください。
 
-`Result` を取り出す基本の方法は `match` です（[07 レコードとバリアント](../language/07-records-and-variants.md)）。また、`Err` をそのまま呼び出し元へ返す `?` があります（[12 エラーと欠陥](../language/12-errors-and-defects.md)）。このモジュールの関数は、よくある `match` の定型を短く書くためのものです。
+`Result` は、基本的には `match` で場合分けして扱います（[07 レコードとバリアント](../language/07-records-and-variants.md)）。`?` を使うと、`Err` をそのまま呼び出し元に返せます（[12 エラーと欠陥](../language/12-errors-and-defects.md)）。このモジュールでは、よく使う処理を短く書ける関数を提供します。
 
 `Result` を受け取る引数のラベルは、すべて `outcome` です（`option` モジュールでは `option`）。
 
@@ -44,7 +44,7 @@ pub fn map_error<T, Fail, Other, effect E>(
 ) -> Result<T, Other> uses E
 ```
 
-`Err` の中身に `apply` を適用して、エラーの型を `Fail` から `Other` に変えます。`Ok` に対しては `apply` を呼びません。`apply` の引数のラベルは `error` です。`option.map` に対応するものがない、`Result` だけの関数です。
+`Err` の中身に `apply` を適用し、エラー型を `Fail` から `Other` に変換します。`Ok` の場合は `apply` を呼びません。`apply` の引数ラベルは `error` です。エラー側の変換は `Result` に特有の操作で、`option.map` に対応する関数はありません。
 
 ### result.and_then
 
@@ -84,7 +84,7 @@ pub fn lookup(code: Result<Int, Int>) -> Result<Int, String> {
 pub fn unwrap_or<T, Fail>(outcome: Result<T, Fail>, default: T) -> T
 ```
 
-`Err` の場合の値を与えて、`Result` を外します。エラーの値は捨てられます。`default` は、`Ok` の場合でも評価されます（Cernith は、引数を先に評価します）。`default` の評価が欠陥になる式なら、`Ok` を渡しても欠陥です。
+`Ok` なら中の値を、`Err` なら `default` を返し、エラー値は捨てます。Cernith は引数を先に評価するため、`Ok` の場合も `default` は評価されます。`default` の評価で欠陥が起きる場合は、`Ok` を渡していても欠陥になります。
 
 ### result.ok
 
@@ -101,7 +101,7 @@ pub fn is_ok<T, Fail>(outcome: Result<T, Fail>) -> Bool
 pub fn is_err<T, Fail>(outcome: Result<T, Fail>) -> Bool
 ```
 
-中身が必要でなく、成功か失敗かだけを知りたいときに使います。同じ `outcome` に対して、2 つの結果は必ず反対です。`==` による比較（`outcome == Ok(value: 1)`）は、`T` と `Fail` が等価比較できるときにしか書けませんが、この 2 つは `T` と `Fail` によらず使えます。
+中身を使わず、成功か失敗かだけを確認したいときに使います。同じ `outcome` に対して、両関数の結果は常に逆になります。`==` による比較（`outcome == Ok(value: 1)`）には `T` と `Fail` の等価比較が必要ですが、この 2 つの関数にはその制約がありません。
 
 ## 例
 

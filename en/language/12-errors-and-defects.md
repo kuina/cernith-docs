@@ -14,7 +14,7 @@ There are no exceptions and no `catch`. A function that can fail returns a `Resu
 
 ## Errors as values
 
-An error type is an ordinary variant. Define one per module or per operation. There is no type common to all errors, and there is no inheritance. Use `Option` to express “no value” when there is no particular reason to give.
+Error types are ordinary variants, usually defined per module or operation. There is no universal error type or inheritance. Use `Option` when a value may be absent and there is no reason to report.
 
 ```text
 variant ParseError {
@@ -23,7 +23,7 @@ variant ParseError {
 }
 ```
 
-`e?` extracts the value if `e` is a success, and if it is an error, **returns from the enclosing function** with that error.
+`e?` unwraps a successful result. If `e` is an error, it **returns that error from the enclosing function**.
 
 - When used on a `Result<T, E>` value, the enclosing function must return `Result<_, E2>`, and `E` must be the same as `E2` (or a subtype of it). If the error types differ, the result is `E0309`. Conversion to a different error is written explicitly, with `match` or `result.map_error`.
 - When used on an `Option<T>` value, the enclosing function must also return `Option<_>`.
@@ -171,7 +171,7 @@ A defect is reported on standard error as a single JSON object, and the program 
 | `values` | The values of the variables the clause refers to |
 | `message` | A description |
 
-This is the case when the following program is run.
+Running the following program produces a defect report:
 
 ```text
 module guide.defect;
@@ -209,7 +209,7 @@ The exit status that a program chooses (the return value of `main`) can be any v
 
 ### Resource exhaustion
 
-When the limit on memory, call depth, or execution steps is exceeded, the program stops with exit status **71** and a report whose `class` is `resource-exhausted` is produced. The `resource` in the report is one of `memory`, `call-depth`, or `steps`. Even with a termination guarantee, a function that terminates can still exceed a limit.
+Exceeding a memory, call-depth, or execution-step limit stops the program with exit status **71**. The report has `class` set to `resource-exhausted` and `resource` set to `memory`, `call-depth`, or `steps`. A termination guarantee does not prevent resource exhaustion.
 
 ```text
 {"schema": "cernith-defect/0.1", "class": "resource-exhausted", "resource": "steps"}

@@ -1,6 +1,6 @@
 # std.async
 
-A module that provides tasks, scopes, channels, waiting for time, and the scheduler that runs them. Write `import std.async;` and call functions such as `async.scope(...)` and `async.spawn(...)`. The concepts and rules (`uses async`, `await`, the rule that every task must be awaited before the end of its scope, and so on) are in [18 Concurrency](../language/18-concurrency.md). This page is a list of functions and types.
+This module provides tasks, scopes, channels, delays, and a scheduler. Import it with `import std.async;` and call functions such as `async.scope(...)` and `async.spawn(...)`. For the concepts and rules, including `uses async`, `await`, and waiting for tasks before their scope ends, see [18 Concurrency](../language/18-concurrency.md). This page lists the available functions and types.
 
 A call to a `uses async` function is written with `await`, as in `await async.sleep(ms: 10)`. The exceptions are `spawn`, `bounded`, and `close`, for which `await` is not required. `spawn` returns a `Task` immediately and is written without `await`; `bounded` and `close` may be written with or without it.
 
@@ -49,7 +49,7 @@ The following calls become defects when they violate their preconditions.
 | `async.with_timeout(tasks, ms, run)` | `ms > 0` |
 | `async.bounded::<T>(tasks, capacity)` | `capacity >= 1` |
 
-Awaiting a canceled task is a defect. Even when every task is waiting and nobody can wake any of them (a deadlock), the scheduler stops the program with a defect.
+Awaiting a canceled task causes a defect. The scheduler also stops the program with a defect if all tasks are waiting and none can resume (a deadlock).
 
 ## Clock and order
 

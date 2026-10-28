@@ -1,6 +1,6 @@
 # std.env
 
-This module reads the environment variables of the process through the capability `Env`. Write `import std.env;` and call its functions as in `env.get(access: ..., name: ...)`. It only reads; there is no function that sets an environment variable.
+This module reads process environment variables through the `Env` capability. Import it with `import std.env;` and call functions such as `env.get(access: ..., name: ...)`. It provides read access only; there is no function for setting variables.
 
 `Env` is passed as the second argument of `main` by listing it in the program’s `manifest` declaration. It cannot be created anywhere else (error `E1301`). A function that receives an `Env` also declares `uses io` ([17 Resources and capabilities](../language/17-resources-and-capabilities.md)).
 
@@ -10,7 +10,7 @@ This module reads the environment variables of the process through the capabilit
 pub capability Env;
 ```
 
-`Env` is a capability with no fields. It has no grant contents; only holding it matters. It cannot be compared with `==`.
+`Env` is a capability with no fields or grant contents. Possessing the value grants access. It does not support `==`.
 
 ## Function list
 

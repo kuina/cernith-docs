@@ -1,13 +1,13 @@
 # Canonical form
 
-The **canonical form** of a program is the output of the formatter (`cernith fmt`). It is a function determined only by the program’s syntax tree and comments, and it fixes a single way of writing, down to whitespace, line breaks, the order of declarations, and where parentheses are placed.
+A program's **canonical form** is the output of the formatter (`cernith fmt`). It depends only on the syntax tree and comments, and specifies a single format for whitespace, line breaks, declaration order, and parentheses.
 
-The grammar does not depend on formatting ([02 Lexical structure](02-lexical-structure.md)). Whatever the formatting, the text can be read grammatically. Text that is not in canonical form produces a diagnostic.
+The grammar is independent of formatting ([02 Lexical structure](02-lexical-structure.md)), so code can be parsed even when it is not in canonical form. Non-canonical text produces a diagnostic.
 
 - In `cernith check`, it is the warning `W0102` (non-canonical-text). The canonical text is attached, and a safe fix, “replace the file with the canonical form,” is proposed. This treatment keeps other diagnostics from being hidden or delayed.
 - In a release build, if the source text does not match the canonical form, it is the error `E0101` (non-canonical-form).
 
-Every command of the implementation that writes out source (`cernith fmt`, editing commands, and the application of fixes) writes it in canonical form.
+All commands that emit source code, including `cernith fmt`, editing commands, and fix application, use canonical form.
 
 The formatter has the following properties.
 

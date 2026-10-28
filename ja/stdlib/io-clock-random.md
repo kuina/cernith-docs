@@ -1,6 +1,6 @@
 # std.io、std.clock、std.random
 
-標準入出力・時計・乱数を扱う 3 つの小さなモジュールです。`import std.io;`、`import std.clock;`、`import std.random;` と書き、`io.write_line(...)`、`clock.now_ms()`、`random.int_between(...)` のように呼びます。
+標準入出力・時刻・乱数を扱う 3 つのモジュールです。`import std.io;`、`import std.clock;`、`import std.random;` で読み込み、`io.write_line(...)`、`clock.now_ms()`、`random.int_between(...)` のように呼び出します。
 
 この 3 つが扱うのは、**ambient な効果**（`io`、`clock`、`random`）です。呼び出すには、その関数が効果を `uses` で宣言していれば足り、ケイパビリティを受け取る必要はありません（[11 効果](../language/11-effects.md)）。ファイル・環境変数・ネットワークのように、プログラムが宣言して受け取った権限を通して行う操作は、別のモジュールが担当します（[fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md)。仕組みは [17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)）。
 
@@ -60,7 +60,7 @@ pub fn write_line(text: String) -> Result<Unit, IoError> uses io
 pub fn now_ms() -> Int uses clock
 ```
 
-現在の時刻をミリ秒の整数で返します。実際に実行したときは、1970-01-01 00:00:00 UTC からの経過ミリ秒です。呼ぶたびに時刻を読み直すので、同じ引数（なし）でも結果は変わります。
+現在時刻を、1970-01-01 00:00:00 UTC からの経過ミリ秒を表す整数として返します。呼び出すたびに時刻を取得するため、引数が同じ（この場合は引数なし）でも結果は変わります。
 
 テストでは、`World` の `now_ms` の値が返ります。この時計は自分では進まないので、`with_world` の中で何度呼んでも同じ値です。進めるのは `clock.sleep_ms` だけです。
 
@@ -70,7 +70,7 @@ pub fn now_ms() -> Int uses clock
 pub fn monotonic_ms() -> Int uses clock, io
 ```
 
-決して戻らない時計の読みを、ミリ秒で返します。起点は分からないので、意味を持つのは 2 つの読みの差だけです。何かにかかった時間を測るのに使います。`now_ms` は日付で、システムによって戻されることがあります。シミュレート世界（`with_world`、`sim.with_sim`）では、`now_ms` と同じく、その世界の時計です。そのような時計がない対象は 0 を返します。
+単調増加する時計の値をミリ秒で返します。起点は未規定なので、2 回の取得値の差を使って経過時間を測ります。一方、`now_ms` は実際の日時を表し、システムの時刻調整で戻ることがあります。シミュレート世界（`with_world`、`sim.with_sim`）では、どちらもその世界の時計を使います。単調時計のないターゲットでは 0 を返します。
 
 ### clock.sleep_ms
 
@@ -85,7 +85,7 @@ pub fn sleep_ms(milliseconds: Int) -> Unit uses clock, io {
 
 **事前条件：** `milliseconds >= 0`。満たさない呼び出しは欠陥です。
 
-シミュレート世界では時間は経ちません。世界の時計が `milliseconds` だけ進むので、`monotonic_ms` と `now_ms` には待った分がすぐに見えます。
+シミュレート世界では、実際に待つことはありません。世界の時計が `milliseconds` だけ進み、`monotonic_ms` と `now_ms` にその分が反映されます。
 
 ### random.int_between
 
@@ -118,7 +118,7 @@ pub fn bytes(
 
 **事前条件：** `count >= 0 and count <= 1048576`。満たさない呼び出しは欠陥です。
 
-安全な乱数源のない対象は `Err(error: RandomError.Unsupported)` を返します。プログラムは、乱数でないバイト列のまま先へ進んではいけません。そのほかの失敗は `Err(error: RandomError.Failed(detail: ...))` です。シミュレート世界では、バイト列は世界の種付きの乱数源から来るので、テストは再現できます。そこでは秘密ではありません。
+安全な乱数源のないターゲットでは `Err(error: RandomError.Unsupported)` を返します。その場合、安全でないバイト列を代用して処理を続けてはいけません。そのほかの失敗は `Err(error: RandomError.Failed(detail: ...))` です。シミュレート世界では、世界のシードに基づく乱数源を使うためテストを再現できますが、そのバイト列を秘密情報として使うことはできません。
 
 ### random.describe
 
@@ -287,7 +287,7 @@ example pick_with_reversed_bounds_is_a_defect for pick {
 
 `io.read_all_lines`、`io.write_line`、`clock.now_ms` は、上の `guide.ambient` の例で確かめています。
 
-次の例は、待ち、その待ちを測り、ランダムなバイト列を求めます。シミュレート世界では、待ちに実際の時間はかかりません。
+次の例では、待機時間を計測し、ランダムなバイト列を取得します。シミュレート世界での待機に実時間はかかりません。
 
 ```cernith
 module guide.clock_and_bytes;

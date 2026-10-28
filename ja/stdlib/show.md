@@ -1,8 +1,8 @@
 # std.show
 
-値をテキストにするインターフェース `Show` と、テキストを扱う 2 つの関数のモジュールです。使うには `import std.show;` と書き、メソッドを `show.text(value: x)` のように呼びます。
+値をテキストに変換するインターフェース `Show` と、テキスト用の補助関数を 2 つ提供します。`import std.show;` で読み込み、`show.text(value: x)` のように呼び出します。
 
-値のテキストは、その値を作る Cernith のコードです：`Point(x: 1, y: 2)`、`Some(value: "a")`、`[1, 2]`。読む人は、これをそのまま `example` に貼り付けられます。`Show` はインターフェースなので（[22 インターフェース](../language/22-interfaces.md)）、関数は `fn describe<T: show.Show>(value: T) -> String` のように、境界で求められます。
+値は、それを構築する Cernith のコードとして表示されます。たとえば `Point(x: 1, y: 2)`、`Some(value: "a")`、`[1, 2]` です。このテキストは、そのまま `example` に貼り付けられます。`Show` はインターフェースなので（[22 インターフェース](../language/22-interfaces.md)）、`fn describe<T: show.Show>(value: T) -> String` のように、関数の境界として要求できます。
 
 ## インターフェース
 
@@ -16,7 +16,7 @@ pub interface Show {
 }
 ```
 
-法則は、値のテキストが 1 つであることを述べます。`cernith test` は、テストするモジュールにある `Show` の `impl` のうち、型パラメータを持たないものすべてについて、この法則を実行します。
+法則は、同じ値から常に同じテキストが得られることを要求します。`cernith test` は、対象モジュールにある型パラメータなしの `Show` 実装すべてに対して、この法則を検査します。
 
 ## Show の impl がある型
 
@@ -35,7 +35,7 @@ pub interface Show {
 
 ## 導出される impl
 
-`impl show.Show for Point derive;` は、フィールドがすべて `Show` を持つレコードまたはバリアントのメソッドを書きます。持たないフィールドがあると `E1404` で、メッセージが、その最初のフィールドを示します（[22 インターフェース](../language/22-interfaces.md)）。
+`impl show.Show for Point derive;` で、レコードやバリアントのメソッドを自動生成できます。すべてのフィールドが `Show` を満たす必要があり、満たさない場合は `E1404` とともに最初の該当フィールドが示されます（[22 インターフェース](../language/22-interfaces.md)）。
 
 | 値 | テキスト |
 | --- | --- |
@@ -43,7 +43,7 @@ pub interface Show {
 | フィールドのあるバリアントのケース | `型.ケース(フィールド: テキスト, ...)` |
 | フィールドのないケース | `型.ケース` |
 
-ジェネリックな型には、パラメータに境界が必要です：`impl<T: show.Show> show.Show for Box<T> derive;`。ほかのテキストにしたい型は、`text` を自分で書きます。
+ジェネリックな型では、`impl<T: show.Show> show.Show for Box<T> derive;` のようにパラメータに境界を付けます。独自の表記を使いたい場合は、`text` を自分で実装します。
 
 ## 関数一覧
 
@@ -61,7 +61,7 @@ pub interface Show {
 pub fn join_texts<T: Show>(items: List<T>, separator: String) -> String
 ```
 
-各要素を `text` で書き、間に `separator` を入れます。リストが空なら、結果は空文字列です。角括弧を含むリスト自身のテキストは、`show.text(value: items)` です。
+各要素を `text` で文字列にし、`separator` で連結します。空のリストなら空文字列を返します。リスト全体を角括弧付きで表示する場合は、`show.text(value: items)` を使います。
 
 ### show.quote
 

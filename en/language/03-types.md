@@ -1,6 +1,6 @@
 # Types
 
-Cernith types are determined statically and are nominal. Two types with different names are different types even if they have the same structure. This chapter describes the built-in types. User-defined types are covered in [07 Records and variants](07-records-and-variants.md) and [08 Refined types and distinct types](08-refined-and-distinct-types.md).
+Cernith has a static, nominal type system: types with different names are distinct even when they have the same structure. This chapter covers built-in types. For user-defined types, see [07 Records and variants](07-records-and-variants.md) and [08 Refined types and distinct types](08-refined-and-distinct-types.md).
 
 ## Built-in types
 
@@ -25,7 +25,7 @@ Cernith types are determined statically and are nominal. Two types with differen
 
 `Int` does not overflow. The result of addition, subtraction, and multiplication is always the exact integer.
 
-For division, the rounding rule is chosen by name. Using `/` on `Int`s is error `E0307`. Write which of `div_floor`, `div_trunc`, and `div_euclid` of `std.int` to use (and the corresponding remainders `rem_floor`, `rem_trunc`, and `rem_euclid`) ([stdlib/int.md](../stdlib/int.md)). `/` can be used only on `Float64`s.
+Integer division requires an explicit choice of rounding rule. Using `/` on `Int`s produces error `E0307`. Instead, use `div_floor`, `div_trunc`, or `div_euclid` from `std.int`; the corresponding remainder functions are `rem_floor`, `rem_trunc`, and `rem_euclid` ([stdlib/int.md](../stdlib/int.md)). `/` is available only for `Float64`s.
 
 ```cernith-error E0307
 module guide.division;
@@ -35,13 +35,13 @@ pub fn half(value: Int) -> Int {
 }
 ```
 
-No single rounding rule is made the default, even though there are several, because the result changes when a negative number is divided. For example, dividing `-7` by `2` gives `-4` with rounding toward negative infinity (floor) and `-3` with truncation toward zero.
+There is no default rounding rule because the choice affects division involving negative numbers. For example, dividing `-7` by `2` gives `-4` when rounding toward negative infinity (floor) and `-3` when truncating toward zero.
 
 ### Float64
 
 `Float64` takes **only finite values**. There are no infinities and no NaN. An operation that would produce infinity or NaN (overflow, division by `0.0`, and so on) becomes a defect ([12 Errors and defects](12-errors-and-defects.md)). As a result, the comparisons `==` and `<` between `Float64`s form a total order over all values.
 
-An operation that mixes `Int` and `Float64` is error `E0302`. Convert explicitly with `from_int` of `std.float`.
+Mixing `Int` and `Float64` in an operation produces error `E0302`. Use `from_int` from `std.float` for an explicit conversion.
 
 ```cernith-error E0302
 module guide.mixing;
@@ -99,7 +99,7 @@ There is no dedicated type for characters. A single character is a `String` of l
 
 `List<T>` is immutable. To create a new sequence with an element added or replaced, use `++` or a function of the standard library ([stdlib/list.md](../stdlib/list.md)). `xs.length` is the number of elements (an `Int` that is zero or greater), and `xs[i]` is the element at index `i`. An out-of-range index is a defect.
 
-`xs.length` and `s.length` are the only accessors of the built-in types that have the form of a field. All other operations are functions of modules. Notations such as `xs.is_empty` and `s.split(...)` do not exist.
+`xs.length` and `s.length` are the only built-in accessors that use field notation. All other operations use module functions. There is no `xs.is_empty` or `s.split(...)` notation.
 
 ```cernith-error E0506
 module guide.builtins;
@@ -139,7 +139,7 @@ example length_counts_scalar_values for length_of {
 
 ### Option and Result
 
-`Option<T>` expresses in the type that “there may be no value,” and `Result<T, E>` expresses that “the operation may fail.” There is no `null`. The possibility that a value is absent appears in the type as `Option`, and the user handles both cases with `match` ([12 Errors and defects](12-errors-and-defects.md)).
+`Option<T>` represents a value that may be absent; `Result<T, E>` represents an operation that may fail. There is no `null`. Use `Option` to make the possibility of a missing value explicit in the type, and handle both cases with `match` ([12 Errors and defects](12-errors-and-defects.md)).
 
 ### Function types
 
@@ -190,7 +190,7 @@ pub fn pair() -> Int {
 | `==`, `!=` (bound `Eq`) | `Int`, `Float64`, `String`, `Bool`, `Unit`, and `List`, `Option`, `Result`, records, and variants whose elements satisfy these |
 | `<` and so on (bound `Ord`) | `Int`, `Float64`, `String`, `Bool` |
 
-Function types have neither. `List`, `Option`, `Result`, records, and variants have no magnitude comparison. Using one is error `E0316`. `Eq` and `Ord` are fixed: a program cannot implement them for its own types. Bounds are also used in generic functions ([06 Functions](06-functions.md)), and a program can declare bounds of its own, called interfaces ([22 Interfaces](22-interfaces.md)).
+Function types support neither equality nor ordering. `List`, `Option`, `Result`, records, and variants do not support ordering; attempting an ordering comparison produces error `E0316`. `Eq` and `Ord` are built-in bounds and cannot be implemented by user code. Bounds also appear in generic functions ([06 Functions](06-functions.md)). You can declare your own bounds using interfaces ([22 Interfaces](22-interfaces.md)).
 
 ```cernith-error E0316
 module guide.ordering;

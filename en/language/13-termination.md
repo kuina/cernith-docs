@@ -2,7 +2,7 @@
 
 **A function that does not declare the effect `diverge` must always terminate.** The checker confirms termination with the following rules, and rejects the program if it cannot. A function that declares `uses diverge` promises nothing about termination, and a function that calls it must also declare `diverge` (the rule for effects; [11 Effects](11-effects.md)). This chain continues up to `main`.
 
-A function with no loops and no recursion terminates trivially (provided the functions it calls terminate). Justification for termination is needed in only the following three cases.
+A function with no loops or recursion terminates as long as the functions it calls terminate. The following cases need explicit justification.
 
 ## Loops
 
@@ -31,7 +31,7 @@ pub fn countdown(n: Int) -> Int {
 }
 ```
 
-The message of `E0601` shows a candidate for the `decreases` clause (`decreases b - a;` for `while a < b`). The candidate is a suggestion and is never applied automatically. The decreasing measure is never inferred automatically.
+An `E0601` diagnostic suggests a `decreases` clause, such as `decreases b - a;` for `while a < b`. This is only a suggestion: the checker never inserts or infers a decreasing measure automatically.
 
 ## Recursion
 
@@ -205,7 +205,7 @@ A function that calls `collatz_steps` must declare `uses diverge` (`E0401`).
 
 ## Limits
 
-A decreasing measure is an `Int` expression, and the most that can be done is to combine them lexicographically. There are no other well-founded orders. A function that needs one as its justification for termination (some graph algorithms, for example) declares `diverge`.
+Decreasing measures must be `Int` expressions, optionally combined lexicographically. Other well-founded orders are not supported. A function that needs such an order to justify termination, as some graph algorithms do, must declare `diverge`.
 
 ## Diagnostic codes
 

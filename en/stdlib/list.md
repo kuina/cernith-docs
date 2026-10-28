@@ -1,6 +1,6 @@
 # std.list
 
-The module of functions for working with `List<T>`. A `List<T>` is an immutable sequence, and every function in this module returns a new list or a value without changing the list passed in. To use it, write `import std.list;` and call functions as in `list.map(items: ..., apply: ...)`. All arguments are labeled, and the label of the argument that receives a list is `items`, except for `flatten`, which takes `lists`, and `zip`, which takes `first` and `second` ([06 Functions](../language/06-functions.md)).
+This module provides operations on immutable `List<T>` values. Functions return a new list or a computed value without changing the input. Import it with `import std.list;` and call functions such as `list.map(items: ..., apply: ...)`. All arguments are labeled. List arguments use `items`, except `flatten`, which uses `lists`, and `zip`, which uses `first` and `second` ([06 Functions](../language/06-functions.md)).
 
 The length and indexing of a list (`items.length`, `items[i]`) are built-in features of the language, not functions of the module ([03 Types](../language/03-types.md)). This page covers the other operations. The module also defines a record type, `Pair<A, B>` (used by [list.zip](#listzip-and-listpair)).
 
@@ -42,7 +42,7 @@ The length and indexing of a list (`items.length`, `items[i]`) are built-in feat
 
 ### Function arguments and effects
 
-A function that has an argument receiving a function, such as `test`, `keep`, `apply`, or `combine`, is effect-polymorphic. If the function passed in is pure, the call is pure, and if the function passed in is `uses io`, the caller must also declare `uses io` ([11 Effects](../language/11-effects.md)). Signatures express this with `effect E` and `uses E`.
+Functions that accept callbacks such as `test`, `keep`, `apply`, or `combine` are effect-polymorphic. A pure callback makes the call pure; a callback with `uses io` requires the caller to declare `uses io` too ([11 Effects](../language/11-effects.md)). The signatures express this with `effect E` and `uses E`.
 
 The exception is `less_than` of `list.sort_by`, which cannot have effects. Passing a function with effects causes error `E0404`.
 
@@ -72,7 +72,7 @@ pub fn preview(items: List<Int>) -> List<Int> {
 
 If `items` is shorter than three elements, the precondition of `list.take` is violated. The diagnostic shows `items=[]` as an input that causes this (the counterexample input). If the caller requires the same condition with its own `requires`, the code is accepted (`preview` in `guide.list_slicing`). How to write preconditions is described in [09 Contracts](../language/09-contracts.md), and how proofs are handled in [10 Proof obligations and assurance levels](../language/10-verification.md).
 
-> Note: `list.take(items, count)` does not silently clamp a `count` that is out of range, because its postcondition guarantees `result.length == count`. A specification that is out of range does not return a result; it is a defect.
+> Note: `list.take(items, count)` does not silently clamp an out-of-range `count`, because its postcondition guarantees `result.length == count`. An out-of-range request causes a defect instead of returning a shorter list.
 
 ## Function details
 

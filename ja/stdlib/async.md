@@ -1,6 +1,6 @@
 # std.async
 
-タスク、スコープ、チャネル、時間の待ち、そしてそれらを実行するスケジューラを提供するモジュールです。`import std.async;` と書き、`async.scope(...)`、`async.spawn(...)` のように呼びます。概念と規則（`uses async`、`await`、スコープの終わりまでにすべてのタスクを `await` する規則など）は [18 並行処理](../language/18-concurrency.md) にあります。このページは関数と型の一覧です。
+タスク、スコープ、チャネル、待機処理と、それらを動かすスケジューラを提供します。`import std.async;` で読み込み、`async.scope(...)` や `async.spawn(...)` のように呼び出します。`uses async`、`await`、スコープの終了前にタスクを待つ規則などは、[18 並行処理](../language/18-concurrency.md) を参照してください。このページでは、関数と型を一覧にしています。
 
 `uses async` の関数の呼び出しは、`await async.sleep(ms: 10)` のように `await` を付けて書きます。例外は `spawn`、`bounded`、`close` で、これらには `await` が要りません。`spawn` は `Task` をすぐに返し、`await` を付けずに書きます。`bounded` と `close` は、`await` を付けても付けなくてもかまいません。
 
@@ -30,11 +30,11 @@
 | `async.race(tasks, candidates)` | `Option<T>` `uses async` | 最初に終わったタスクの値を `Some` で返し、残りをキャンセルする。候補が空なら `None` |
 | `async.cancel(task)` | `Unit` `uses async` | タスクをキャンセルする。二度と実行されない |
 | `async.sleep(ms)` | `Unit` `uses async` | スケジューラの時計で `ms` ミリ秒待つ。`ms >= 0` |
-| `async.pause()` | `Unit` `uses async` | ほかの実行可能なタスクを先に走らせる |
-| `async.with_timeout(tasks, ms, run)` | `Result<T, Timeout>` `uses async` | `run` を `ms` ミリ秒以内の期限で走らせる。期限を過ぎるとキャンセルして `Err(error: Timeout.TimedOut)`。`ms > 0` |
+| `async.pause()` | `Unit` `uses async` | ほかの実行可能なタスクに実行を譲る |
+| `async.with_timeout(tasks, ms, run)` | `Result<T, Timeout>` `uses async` | `run` を実行し、期限の `ms` ミリ秒を過ぎるとキャンセルして `Err(error: Timeout.TimedOut)` を返す。`ms > 0` |
 | `async.bounded::<T>(tasks, capacity)` | `Channel<T>` `uses async` | 容量 `capacity` のチャネルを作る。`capacity >= 1` |
-| `async.send(to, value)` | `Result<Unit, SendError>` `uses async` | 送る。いっぱいなら待つ。閉じていれば `Err(error: SendError.Closed)` |
-| `async.receive(from)` | `Option<T>` `uses async` | 受け取る。空なら待つ。閉じていて空なら `None` |
+| `async.send(to, value)` | `Result<Unit, SendError>` `uses async` | 値を送信する。チャネルが満杯なら待機し、閉じていれば `Err(error: SendError.Closed)` を返す |
+| `async.receive(from)` | `Option<T>` `uses async` | 値を受信する。チャネルが空なら待機し、閉じていて空なら `None` を返す |
 | `async.close(sender)` | `Unit` `uses async` | チャネルを閉じる。以後の `send` は失敗し、受信側は残りを読んで、そのあと `None` を受け取る |
 
 このモジュールには、`await` の仕組みが内部で使う関数と型（`bind`、`suspend`、`join`、`erase`、`reveal`、`Any`、`Request`、`Step`）もあります。利用者が直接使うものではありません。
@@ -49,7 +49,7 @@
 | `async.with_timeout(tasks, ms, run)` | `ms > 0` |
 | `async.bounded::<T>(tasks, capacity)` | `capacity >= 1` |
 
-キャンセルされたタスクを `await` すると欠陥です。すべてのタスクが待っていて、誰も起こせない状態（デッドロック）になっても、スケジューラが欠陥で止めます。
+キャンセルされたタスクを `await` すると欠陥になります。また、すべてのタスクが待機し、どれも再開できない状態（デッドロック）になると、スケジューラは欠陥としてプログラムを停止します。
 
 ## 時計と順序
 

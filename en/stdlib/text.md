@@ -1,6 +1,6 @@
 # std.text
 
-The module of functions for working with `String`. Write `import std.text;` and call functions as in `text.split(of: ..., separator: ...)`. The record type `SplitPair`, which represents the result of a split, is also in this module (`text.SplitPair`).
+This module provides operations on `String`. Import it with `import std.text;` and call functions such as `text.split(of: ..., separator: ...)`. It also defines `text.SplitPair`, a record for the result of a split.
 
 A `String` is a sequence of Unicode scalar values ([03 Types](../language/03-types.md)). In this module, all positions, lengths, and counts are measured in scalar values. They are not byte counts, not counts of UTF-16 units, and not the unit a person perceives as one character (a grapheme). For example, the length of `"a😀b"` is 3, and `text.index_of(of: "a😀b", part: "b")` is `Some(value: 2)`. `"e\u{301}"`, which uses a combining character (`e` and U+0301), has length 2 even though it looks like one character.
 
@@ -106,7 +106,7 @@ Precondition: `value >= 0 and value <= 1114111 and not (value >= 55296 and value
 
 Postcondition: the length of the result is 1.
 
-Why it does not return `Option`: a value that is not a scalar value cannot become a `String`, so the precondition makes it the caller’s responsibility to guarantee the range.
+The precondition makes the caller responsible for supplying a valid scalar value, since other values cannot be represented in a `String`. This function therefore does not return an `Option`.
 
 - `text.from_code_point(value: 97)` → `"a"`
 - `text.from_code_point(value: 128512)` → `"😀"`
@@ -153,7 +153,7 @@ Edge cases: if `part` is an empty string, the result is `Some(value: 0)` even wh
 
 Postcondition: for `Some(value: position)`, `position >= 0`, `position + part.length <= of.length`, and `text.slice(of: of, from: position, to: position + part.length) == part`.
 
-Why it returns `Option`: not finding the part is one of the normal results. Instead of returning a sentinel value such as `-1`, it is expressed in the type.
+A missing match is an ordinary result, represented by `Option` rather than a sentinel such as `-1`.
 
 - `text.index_of(of: "banana", part: "an")` → `Some(value: 1)`
 - `text.index_of(of: "banana", part: "x")` → `None`
@@ -277,7 +277,7 @@ Edge cases: if `parts` is an empty list, the result is `""`, and if it has one e
 pub fn lines(of: String) -> List<String>
 ```
 
-Splits a string into lines. The result is that of the following steps.
+Splits a string into lines in three steps:
 
 1. Apply `text.split` with `"\n"`.
 2. If the last part is an empty string, remove that one part.

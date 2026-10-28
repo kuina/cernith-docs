@@ -10,7 +10,7 @@ In a function call, **every argument carries a label, and the arguments are list
 function name(label1: expression1, label2: expression2, ...)
 ```
 
-A label is the same as the name used inside the function. Just reading the code on the caller side shows the meaning of each argument.
+The label is the parameter name used inside the function, so each argument's purpose is clear at the call site.
 
 ```cernith
 module guide.labels;
@@ -50,7 +50,7 @@ pub fn use_area() -> Int {
 }
 ```
 
-The rules for labels apply in the same way not only to functions but also to the construction of records and variant cases (`Rect(width: 3, height: 4)`), to `Type.with(...)`, and to patterns ([07 Records and variants](07-records-and-variants.md)). The only form of call that can be written without labels is indexing, `xs[i]`.
+The same label rules apply to functions, record and variant construction (`Rect(width: 3, height: 4)`), `Type.with(...)`, and patterns ([07 Records and variants](07-records-and-variants.md)). Indexing, `xs[i]`, is the only call form that does not require labels.
 
 When a call is made through a value of a function type, the labels are those of the **type as seen from the caller** ([06 Functions](06-functions.md)).
 
@@ -79,7 +79,7 @@ When a call is made through a value of a function type, the labels are those of 
 
 ### Precedence
 
-The operators are listed from the strongest binding to the weakest. Operators in the same row have the same strength.
+Operators are listed from highest to lowest precedence. Operators in the same row have equal precedence.
 
 | Strength | Operators | Associativity |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ pub fn between(a: Int, b: Int, c: Int) -> Bool {
 
 ### Short-circuit evaluation
 
-`a and b` does not evaluate `b` if `a` is false. `a or b` does not evaluate `b` if `a` is true. `a implies b` does not evaluate `b` if `a` is false. In the right operand of `and` and `implies`, it can be assumed that the left operand holds; in the right operand of `or`, that it does not hold. The verifier (`cernith check --verify`) uses the same assumption, so the check for an out-of-range index can be guarded by a condition in the left operand, as follows.
+`a and b` skips `b` when `a` is false. `a or b` skips `b` when `a` is true. `a implies b` skips `b` when `a` is false. Thus, the right operand of `and` or `implies` can assume the left operand is true; the right operand of `or` can assume it is false. The verifier (`cernith check --verify`) uses these same assumptions, so a condition on the left can guard an index access on the right:
 
 ```cernith
 module guide.guards;
@@ -162,7 +162,7 @@ match expression {
 ```
 
 - The condition is a `Bool` and is not enclosed in parentheses.
-- The types of the values of the branches must agree in all branches (taking subtyping into account). If they do not agree, the error is `E0301` (`E0302` for `Int` and `Float64`, `E0303` when a `distinct` type is involved).
+- All branches must produce compatible types, taking subtyping into account. Incompatible branches produce `E0301` (`E0302` for `Int` and `Float64`, or `E0303` when a `distinct` type is involved).
 - An `if` without an `else` has type `Unit`. A branch that returns a value cannot be written without an `else`.
 - Each case of a `match` has the form `pattern => expression,` or `pattern => { block },`, and **the last case also ends with a comma**. A `match` must be exhaustive over all possible values of the scrutinee ([07 Records and variants](07-records-and-variants.md)).
 
@@ -237,7 +237,7 @@ example plus_adds_the_branch for plus {
 }
 ```
 
-Because of this rule, the grammar never confuses the case in which the line after an `if` statement starts with `-x` with the case in which `x` is subtracted from an `if` expression.
+This rule lets the grammar distinguish an `if` statement followed by a line starting with `-x` from an `if` expression from which `x` is subtracted.
 
 ## Lists
 

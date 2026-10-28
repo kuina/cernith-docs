@@ -1,6 +1,6 @@
 # Proof obligations and assurance levels
 
-From contracts ([09 Contracts](09-contracts.md)) and from the places where a program can stop with a defect (an out-of-range index, division by zero, and the like), the checker creates **proof obligations** and attempts to prove them. Proofs are performed with `cernith check --verify`. `cernith check` without `--verify` checks the rules for syntax, names, types, effects, exhaustiveness, and termination, but does not examine proof obligations.
+The checker generates **proof obligations** from contracts ([09 Contracts](09-contracts.md)) and operations that can cause defects, such as out-of-range indexing or division by zero. Use `cernith check --verify` to attempt these proofs. Without `--verify`, `cernith check` checks syntax, names, types, effects, exhaustiveness, and termination, but does not examine proof obligations.
 
 ## Proof obligations
 
@@ -22,7 +22,7 @@ Standard library functions that can cause a defect, such as integer division and
 
 ### How obligations are created
 
-Obligations are created by symbolic execution of function bodies. This is done **modularly**: the body of a function is examined using only **its own contract** and **the contracts of the functions it calls**. The bodies of the called functions are not looked at.
+The checker generates obligations by symbolically executing function bodies. Verification is **modular**: each body is analyzed using **its own contract** and **the contracts of the functions it calls**, without examining those functions' bodies.
 
 1. **Entry.** Each parameter is an arbitrary value of its type. The facts that hold are the conditions of parameters of refined types and the function’s `requires`.
 2. **Straight-line code.** An obligation is examined under all the facts and branch conditions that hold at that point. After an obligation has been proved (or when execution passes a place that could cause a defect), the analysis continues with that claim assumed to hold.
@@ -119,7 +119,7 @@ pub fn ratio(a: Float64, b: Float64) -> Float64 {
 }
 ```
 
-The following is an example that the solver cannot decide. To show that `result <= a` also holds in the `else` branch, the solver has to reason about the order of strings, and it gives up within its budget, so the following postcondition is `unknown` (`W0504`). A runtime check remains, so if the contract is broken, the program stops with a defect at run time.
+In the following example, proving `result <= a` in the `else` branch requires reasoning about string ordering. The solver cannot decide within its budget, so it reports the postcondition as `unknown` (`W0504`). The condition is still checked at run time; a violation stops the program with a defect.
 
 ```cernith-error W0504
 module guide.unknown;
@@ -139,7 +139,7 @@ pub fn smaller(a: String, b: String) -> String {
 
 ## Assurance levels
 
-For each definition, the checker reports the **assurance level**, as the highest one that has been reached.
+For each definition, the checker reports the highest **assurance level** it has reached.
 
 | Level | Requirement |
 | --- | --- |

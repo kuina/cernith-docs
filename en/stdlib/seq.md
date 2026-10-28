@@ -1,8 +1,8 @@
 # std.seq
 
-The module of lazy sequences that end. A `Seq<T>` computes its items only when a consumer asks for them, and it has a `bound`, an upper bound on its length, so a loop over a `Seq` always ends. To use it, write `import std.seq;` and call functions as in `seq.map(source: ..., apply: ...)`. All arguments are labeled, and the label of the argument that receives a sequence is `source`, except for `chain` and `zip`, which take `first` and `second` ([06 Functions](../language/06-functions.md)).
+This module provides finite lazy sequences. A `Seq<T>` computes elements only when requested and carries an upper bound on its length, `bound`, so iteration always terminates. Import it with `import std.seq;` and call functions such as `seq.map(source: ..., apply: ...)`. All arguments are labeled. Sequence arguments use `source`, except `chain` and `zip`, which use `first` and `second` ([06 Functions](../language/06-functions.md)).
 
-A list is still the default. Use a `Seq` for a series that is large or made on demand, or when the first match is all that is wanted. Each item costs a few calls of closures, and the targets do not fuse the steps.
+Use a list for most sequences. Choose `Seq` for large or on-demand data, or when you only need the first match. Each element requires a few closure calls; targets do not fuse these steps.
 
 ## Types
 
@@ -76,7 +76,7 @@ A series with no end of its own (`1, 2, 4, 8, ...`) is written with `seq.iterate
 
 ### Functions are pure
 
-The functions that a combinator or consumer receives (`apply`, `keep`, `test`, `next`, `combine`) cannot have effects. A function with effects is `E0404`. A step has no effects, so an effect is never run at a time the reader cannot see.
+Callbacks passed to combinators and consumers (`apply`, `keep`, `test`, `next`, `combine`) must be pure; effectful callbacks produce `E0404`. This prevents lazy evaluation from triggering effects at unexpected points.
 
 ### No preconditions
 

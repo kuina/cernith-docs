@@ -1,6 +1,6 @@
 # std.console
 
-A module that handles standard input, standard output, and standard error of command-line programs through the capability `Console`. Write `import std.console;` and call functions as in `console.write_line(access: ..., text: ...)`. Every function takes `access: console.Console` as its first argument.
+This module provides access to standard input, standard output, and standard error through the `Console` capability. Import it with `import std.console;` and call functions such as `console.write_line(access: ..., text: ...)`. Each function takes `access: console.Console` as its first argument.
 
 `std.io` ([io-clock-random](io-clock-random.md)) can be called by anyone who declares `uses io`. In contrast, the functions of `std.console` can be called only from a function that has received a `Console` value. A `Console` is passed as the second argument of `main` when it is written in the program’s `manifest` declaration. It cannot be created anywhere else (error `E1301`). This makes it possible to tell whether a function uses standard input and output just by looking at the function’s arguments ([17 Resources and capabilities](../language/17-resources-and-capabilities.md)).
 
@@ -157,7 +157,7 @@ Writes `text` to standard error as one line. Write the warnings and error report
 pub fn is_terminal(access: Console, stream: Stream) -> Bool uses io
 ```
 
-Returns `true` if the stream is a terminal, that is, if a person looks at it, and `false` if it is a pipe or a file. A target that has no terminal (a page, a module without a host) answers `false`. Use it to decide whether to write colors or progress marks. In a simulated world the standard streams are pipes unless the setup of `sim.with_sim` contains `sim.terminal(width: ...)` ([sim](sim.md)); then both streams are a terminal.
+Returns `true` if the stream is connected to a terminal, or `false` if it is a pipe or file. Targets without a terminal, such as a page or a module without a host, return `false`. Use this to decide whether to display colors or progress indicators. Simulated standard streams are pipes by default; adding `sim.terminal(width: ...)` to the setup of `sim.with_sim` makes both streams terminals ([sim](sim.md)).
 
 ### console.width
 
@@ -165,7 +165,7 @@ Returns `true` if the stream is a terminal, that is, if a person looks at it, an
 pub fn width(access: Console, stream: Stream) -> Option<Int> uses io
 ```
 
-Returns the width of the terminal in columns, as `Some(value: columns)`, if the stream is a terminal whose size the system tells. Otherwise the result is `None`. In a simulated world, the width is the one given to `sim.terminal`.
+Returns the terminal width in columns as `Some(value: columns)` if the stream is a terminal and the system can report its size; otherwise, returns `None`. In a simulated world, the width is the value passed to `sim.terminal`.
 
 ### console.describe
 

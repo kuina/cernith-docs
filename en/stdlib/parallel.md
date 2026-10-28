@@ -1,6 +1,6 @@
 # std.parallel
 
-A module of functions that apply a function to each element of a list. They return the same results as `map`, `filter`, `fold`, `any`, and `all` of [list](list.md), but in exchange for the function you pass not being allowed to have effects, the calls for the individual elements can be run side by side on several workers. Write `import std.parallel;` to use it, and call functions as in `parallel.map(items: ..., apply: ...)`.
+This module provides versions of [list](list.md)'s `map`, `filter`, `fold`, `any`, and `all` that can run on multiple workers. They return the same results, but require pure callbacks so that calls for different elements can run concurrently. Import it with `import std.parallel;` and call functions such as `parallel.map(items: ..., apply: ...)`.
 
 ## Function list
 
@@ -20,7 +20,7 @@ The other functions of `std.list` (`find`, `count`, `flat_map`, and so on) have 
 
 By definition, the result of each function of `parallel` is the result of the same-named function of `std.list` called with the same arguments. The order of the result is the order of `items`. Whatever order the calls for the individual elements are made in, the order of the result does not change.
 
-A function of `std.list` cannot always be replaced as it is by the function of `parallel`. The conditions on the function that is received differ in the following two points.
+A `std.list` call cannot always be replaced directly with its `parallel` counterpart. The callbacks must meet two additional requirements.
 
 ### The functions you pass have no effects
 
@@ -68,7 +68,7 @@ When these conditions hold, the result is equal to the result of the sequential 
 
 Examples that satisfy the conditions are `+` with `0`, `*` with `1`, and the string `++` with `""`. Examples that do not are `total - item` (not associative) and `+` with `initial: 10` (`10` is not an identity element).
 
-The library cannot check that the conditions hold. The conditions are properties of the functions that are passed, and the caller guarantees them. For integer addition, they can be checked with a `property` (`fold_of_a_split_is_the_fold_of_the_halves` in the example below).
+The library cannot verify these properties of `combine` and `initial`; the caller must ensure they hold. For integer addition, you can test them with a `property`, as in `fold_of_a_split_is_the_fold_of_the_halves` below.
 
 ## Function details
 

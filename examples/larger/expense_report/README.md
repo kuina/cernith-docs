@@ -1,8 +1,8 @@
 # expense_report
 
-A command-line tool that reads a CSV file of expenses from standard input and prints a report: totals per category and per month, the largest expenses, budget warnings and a grand total. It is a larger sample (eleven small modules, one of them test support) that shows how a real Cernith program is put together: all logic in pure functions with contracts, examples and properties, and one thin `uses io` shell.
+This command-line tool reads expense records as CSV from standard input and prints category and monthly totals, the largest expenses, budget warnings, and a grand total. Its eleven small modules, including one for test support, show how to organize a larger Cernith program: pure logic with contracts, examples, and properties, plus a small `uses io` entry point.
 
-Money is parsed into integer cents and never touches `Float64`. Validation collects every problem instead of stopping at the first, and the report is still printed from the valid lines.
+Amounts are stored as integer cents throughout; the program does not use `Float64`. Validation collects all problems, and the report uses the valid records even when other records contain errors.
 
 ## How to run
 
@@ -50,16 +50,16 @@ date,category,description,amount
 ```
 
 - The first line must be the header `date,category,description,amount`.
-- `date` is `YYYY-MM-DD` and is checked for real: days per month and leap years (`2026-02-30` is an error, `2024-02-29` is fine).
-- `category` is one of `food`, `lodging`, `office`, `other`, `software`, `travel` (upper case is accepted and lowered).
+- `date` uses `YYYY-MM-DD` and must be a valid calendar date, including month lengths and leap years (`2026-02-30` is rejected; `2024-02-29` is accepted).
+- `category` is one of `food`, `lodging`, `office`, `other`, `software`, or `travel`. Uppercase input is accepted and converted to lowercase.
 - `description` is not empty.
 - `amount` has exactly two decimals or none: `12.50`, `7`. A leading `-` marks a refund (`-45.00`). `12.5`, `12.`, `.5`, `+4` and `1,5` are errors.
 - Spaces around a field are ignored. Blank lines are skipped, but still counted in the line numbers.
-- Quoted fields are NOT supported. A double quote anywhere in a line is an error, and so is a comma inside a field: it simply looks like one field too many.
+- Quoted fields are not supported. A double quote anywhere in a line is an error. A comma within a field creates an extra field and is also rejected.
 
 ## A real run
 
-`expenses.csv` (the same text is in `run.stdin`) has 17 records, 4 of them bad. With the options of the command above:
+`expenses.csv` contains 17 records, 4 of them invalid; `run.stdin` contains the same input. The command above produces:
 
 ```
 Expense report for 2026-10
@@ -89,7 +89,7 @@ Problems (4)
   line 14: record has 5 fields, expected 4 (a comma inside a field is not supported)
 ```
 
-The exit status was 0. With a tighter budget, `--budget food=200.00 --top 2 --strict`, the sections change like this and the status is 1:
+The exit status was 0. With a tighter budget, `--budget food=200.00 --top 2 --strict`, the following sections change and the exit status becomes 1:
 
 ```
 Largest expenses
@@ -144,5 +144,5 @@ All modules are under `src/expense_report/`. Only `main` has `uses io`.
 ## Things to notice
 
 - Errors are values. A bad line is a `Problem` (line number plus a `Reason` variant), not a defect, so the program can list all of them.
-- Contracts that do work: `csv.fields` promises the field count, so `expense` indexes the fields without checking again; `align_left` and `align_right` promise the same number of cells, so `report` indexes them safely.
+- Contracts support callers: `csv.fields` guarantees the field count so `expense` can index without checking again; `align_left` and `align_right` guarantee equal cell counts so `report` can index safely.
 - `main` is the only function with `uses io`; everything else is tested with plain `example` and `property` items.

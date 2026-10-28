@@ -1,6 +1,6 @@
 # Foreign functions
 
-The implementation of a function can be written in a language other than Cernith. Such a function is called a **foreign function**. It is used for processing that Cernith cannot express, such as calling an existing library.
+A **foreign function** is implemented in a language other than Cernith. Use one for operations Cernith cannot express directly, such as calling an existing library.
 
 ## Declaration
 
@@ -62,7 +62,7 @@ fn isqrt(value: Option<Int>) -> Int {
 
 ## Contracts are trusted
 
-**The body of a foreign function is not checked.** Its contract is believed as written. As with an ordinary function, the caller carries the proof obligation for `requires`, and `ensures` is used as something that holds. In other words, the contracts of foreign functions are the foundation of trust in a program. The `audit` command of the implementation lists all foreign functions and their contracts as the trust boundary.
+**Foreign function bodies are not checked.** The checker trusts their declared contracts. As with an ordinary function, callers must establish `requires` and may assume `ensures`. These contracts therefore form part of the program's trust boundary. The `audit` command lists all foreign functions and their contracts.
 
 - If the signature has no `uses`, the function claims to be pure.
 - It also claims to terminate. A foreign function that might not stop declares `uses diverge`.
@@ -70,7 +70,7 @@ fn isqrt(value: Option<Int>) -> Int {
 
 ## Which implementation is used
 
-The standard execution of `cernith run` and `cernith test` (the reference interpreter) uses the implementation on the `foreign python` line. Running a foreign function that has no such line is a `foreign-failure` defect.
+The reference interpreter used by `cernith run` and `cernith test` selects the `foreign python` implementation. Calling a foreign function without that implementation causes a `foreign-failure` defect.
 
 When building an executable for a specific backend (`cernith build --target ...`), a foreign function with no `foreign` line for that backend is `E0220`.
 

@@ -1,6 +1,6 @@
 # std.http
 
-HTTP で他のホストから内容を取ってくるモジュールです。`import std.http;` と書き、`http.get(access: ..., url: ...)` のように呼びます。`get` と `get_bytes` は GET リクエストを送って本文を返します。`send` は、任意のメソッド、ヘッダー、本文を持つリクエストを送り、ステータスとヘッダーも返します。呼び出しは応答が返るまで待ちます。
+ほかのホストに HTTP リクエストを送るモジュールです。`import std.http;` で読み込み、`http.get(access: ..., url: ...)` のように呼び出します。`get` と `get_bytes` は GET リクエストの応答本文を返します。`send` ではメソッド・ヘッダー・本文を指定でき、応答のステータスとヘッダーも取得できます。いずれも応答が返るまで待機します。
 
 HTTP を使うには、ケイパビリティ `Http` が必要です。`Http` は、プログラムの `manifest` 宣言で、**接続してよいホスト名のリスト**を付けて求めます。`main` の第 2 引数として渡されます。ほかの場所では作れません（エラー `E1301`）。`Http` を受け取る関数は、`uses io` も宣言します（[17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)）。
 
@@ -123,7 +123,7 @@ pub fn get(access: Http, url: String) -> Result<String, HttpError> uses io
 3. ほかのステータスコードなら、`Err(error: HttpError.Status(code: ...))` です。本文は返りません。
 4. 接続できないなど、応答が得られなければ `Err(error: HttpError.Network(detail: ...))`、実行環境が対応していなければ `Err(error: HttpError.Unsupported)` です。
 
-ステータスコードが成功の範囲にないとき、エラーにするのは、本文を成功と取り違えて使うことを防ぐためです。404 のページの本文を、期待したデータとして処理しないで済みます。
+成功以外のステータスコードをエラーにすることで、404 ページなどの本文を、期待したデータと取り違えて処理するのを防ぎます。
 
 ### http.get_bytes
 
@@ -155,7 +155,7 @@ pub fn send(
    - 改行を含むヘッダーの値（ヘッダーインジェクションを防ぎます）
 3. それ以外は送られます。応答が得られなければ、結果は `Err(error: HttpError.Network(detail: ...))` です。制限時間を過ぎたときの `detail` は `"timeout"`、証明書の検査に失敗したときは `"certificate"` です（この検査は切れません）。応答の本文が 64 MiB を超えるときも `Network` の失敗です。対象がリクエストを出せないときは、`Err(error: HttpError.Unsupported)` です。
 
-**リダイレクトはたどりません。** 3xx の応答が、`Location` ヘッダー付きでそのまま応答になります。プログラムがもう一度尋ねるので、新しいアドレスも、ほかのアドレスと同じように、許可されたホストに対して検査されます。
+**リダイレクトは自動ではたどりません。** 3xx の応答は、`Location` ヘッダーとともにそのまま返されます。移動先に接続するには、プログラムから改めてリクエストを送ります。その際、移動先も許可されたホストかどうか検査されます。
 
 ### http.new_request
 
@@ -163,7 +163,7 @@ pub fn send(
 pub fn new_request(method: Method, url: String) -> Request
 ```
 
-ヘッダーがなく、本文が空で、`timeout_ms` が 30000 のリクエストを返します。ほかのリクエストは、`Request` レコードを書き並べて作ります。
+ヘッダーなし、本文が空、`timeout_ms` が 30000 のリクエストを返します。それ以外のリクエストは、`Request` の各フィールドを指定して作成します。
 
 ### http.header_value
 
@@ -224,7 +224,7 @@ pub fn simulated_with(hosts: List<String>) -> Http
 
 テストの世界での応答は、`std.sim.with_sim` の `setup` に書いたルート（`sim.route`、`sim.route_bytes`）から返ります（[sim](sim.md)）。URL が完全に一致するルートがあれば、そのステータスコードと本文で応答します。ルートがない URL は、`Network(detail: "network")` になります。
 
-`send` では、メソッドを名指しする `sim.route_for(method, url, ...)` が応答を決めます。そのようなルートのない `GET` は、普通のルートにフォールバックします。実行中に `send` で送られたリクエストは、`sim.requests_made` で一覧できます（[sim](sim.md)）。
+`send` の応答は、メソッドを指定する `sim.route_for(method, url, ...)` で設定します。対応するルートがない `GET` は、通常のルートにフォールバックします。実行中に `send` で送信したリクエストは、`sim.requests_made` で一覧できます（[sim](sim.md)）。
 
 ## 例
 
@@ -481,7 +481,7 @@ example reachable_follows_the_grant for reachable {
 
 ### リクエストを送る
 
-次のモジュールは、ヘッダーと本文を持つ POST リクエストを送り、応答のヘッダーを読み、`send` の拒否を確かめます。シミュレート世界では、`sim.route_for` が応答を与え、`sim.requests_made` が送られたものを示します。
+次のモジュールでは、ヘッダーと本文を含む POST リクエストを送り、応答ヘッダーを読み取ります。また、`send` が不正なリクエストを拒否することも検査します。シミュレート世界では、`sim.route_for` で応答を設定し、`sim.requests_made` で送信内容を確認します。
 
 ```cernith
 module guide.http_send;

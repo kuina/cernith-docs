@@ -1,8 +1,8 @@
 # std.bytes
 
-A module of functions that create, read, and transform `Bytes` (a sequence of integers from 0 to 255). `Bytes` is a prelude type and has no literal ([03 Types](../language/03-types.md)). To use the functions of this module, write `import std.bytes;` and call them as in `bytes.length(bytes: data)`. The module alias `bytes` and the argument label `bytes` are different things.
+This module creates, reads, and transforms `Bytes`, a sequence of integers from 0 to 255. `Bytes` is a prelude type with no literal syntax ([03 Types](../language/03-types.md)). Import the module with `import std.bytes;` and call its functions as in `bytes.length(bytes: data)`. The module alias and argument label are both spelled `bytes`, but serve different roles.
 
-Like other values, `Bytes` is an immutable value. `==` compares the length and each element. There is no ordering comparison. `bytes.set` and `bytes.fill`, which rewrite elements, do not change the original sequence; they return a new, rewritten sequence. Positions are counted from 0.
+`Bytes` is immutable. `==` compares its length and elements; ordering comparisons are not supported. Functions such as `bytes.set` and `bytes.fill` return a modified copy rather than changing the original sequence. Positions are zero-based.
 
 All functions are pure and have no effects. A call that does not satisfy a precondition (`requires`) is a defect ([12 Errors and defects](../language/12-errors-and-defects.md)). The functions that turn data coming from outside (strings, lists) into `Bytes` (`from_list`, `from_hex`, `from_base64`), and `to_text`, which turns `Bytes` back into a string, return `None` rather than a defect for input that cannot be converted.
 
@@ -76,7 +76,7 @@ pub fn to_list(bytes: Bytes) -> List<Int>
 
 `from_list` turns a `List<Int>` into `Bytes`. It returns `Some` when every element is from 0 to 255, and `None` if even one element is out of range (256 or more, or negative). An empty list gives `Some` with an empty sequence. `to_list` is the reverse: it turns the elements into a `List<Int>`. The length of the result is the same as `bytes.length`, and each element is from 0 to 255.
 
-Why `from_list` returns an `Option`: a `List<Int>` can hold any integer. Rather than requiring the caller to prevent out-of-range elements in advance, the function reports them as `None`.
+`from_list` returns an `Option` because a `List<Int>` can contain integers outside the byte range. The caller can handle these as `None` rather than having to rule them out in advance.
 
 - `bytes.from_list(items: [0, 255])` → `Some(value: ...)` (a `Bytes` whose elements are `[0, 255]`)
 - `bytes.from_list(items: [])` → `Some(value: bytes.empty())`
@@ -90,7 +90,7 @@ Why `from_list` returns an `Option`: a `List<Int>` can hold any integer. Rather 
 pub fn length(bytes: Bytes) -> Int
 ```
 
-Returns the number of bytes. This is not the number of characters (for a `Bytes` made from a `String` with `bytes.from_text`, it does not necessarily match the number of characters).
+Returns the number of bytes. For data created from a `String` with `bytes.from_text`, this may differ from the number of characters.
 
 - `bytes.length(bytes: bytes.from_text(text: "é"))` → `2`
 
@@ -129,7 +129,7 @@ To update a sequence held in a variable, assign the result to the same variable,
 - `bytes.set(bytes: bytes.new(count: 1, fill: 0), index: 0, value: 256)` → defect
 - `bytes.set(bytes: bytes.new(count: 1, fill: 0), index: 0, value: -1)` → defect
 
-That the original sequence does not change is checked by an `example` (`set_keeps_the_original`).
+The `set_keeps_the_original` example checks that the original sequence is unchanged.
 
 ### bytes.fill
 
@@ -325,7 +325,7 @@ pub fn to_text(bytes: Bytes) -> Option<String>
 
 An empty sequence gives `Some(value: "")`. The byte 0 is read as U+0000, and a byte order mark (`[239, 187, 191]`, U+FEFF) is not removed but remains as a character. For any `s`, `to_text(from_text(s))` is `Some(value: s)`.
 
-Why `to_text` returns an `Option`: `Bytes` can hold any sequence of bytes, but a `String` is a sequence of Unicode scalar values. An invalid sequence is not turned into a replacement character or the like; it is reported as `None`.
+`to_text` returns an `Option` because not every byte sequence represents a valid sequence of Unicode scalar values. Invalid UTF-8 produces `None`; it is not repaired with replacement characters.
 
 - `bytes.to_list(bytes: bytes.from_text(text: "aé€😀"))` → `[97, 195, 169, 226, 130, 172, 240, 159, 152, 128]`
 - `bytes.to_list(bytes: bytes.from_text(text: ""))` → `[]`

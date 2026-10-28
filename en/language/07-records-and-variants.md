@@ -1,6 +1,6 @@
 # Records and variants
 
-There are two compound types that users can define: **records** (a set of named fields) and **variants** (exactly one of several cases). There are no tuples. Both are immutable and nominal types. Even with the same structure, types with different names are different types.
+You can define two kinds of compound types: **records**, which group named fields, and **variants**, whose values belong to exactly one of several cases. There are no tuples. Both records and variants are immutable and nominal: types with different names are distinct even when their structures match.
 
 ## Records
 
@@ -53,7 +53,7 @@ pub fn square(side: Int) -> Rect {
 
 ### Record invariants
 
-An invariant can be attached to a record with `where`. Inside the condition, the names of the fields are used as they are.
+Use `where` to attach an invariant to a record. The condition refers to fields directly by name.
 
 ```cernith
 module guide.grids;
@@ -109,7 +109,7 @@ An invariant is a specification expression. Functions that have effects cannot b
 
 A value of a variant is exactly one of its cases. A case can have fields. A variant may be recursive or generic.
 
-A case is written in the form `variant name.case name`. A case with fields is constructed in the form of a call, and a case without fields is written without parentheses. For a type in another module, it is `module alias.type name.case name`. Only `Some`, `None`, `Ok`, and `Err` are cases from the prelude, so they are written without a type name.
+Refer to a case as `variant name.case name`. Construct a case with fields using a call; write a case without fields without parentheses. For a type in another module, use `module alias.type name.case name`. The prelude cases `Some`, `None`, `Ok`, and `Err` are the only exceptions: they need no type prefix.
 
 ```cernith
 module guide.expressions;
@@ -203,7 +203,7 @@ pub fn go(light: Light) -> Bool {
 
 ### Or-patterns
 
-Alternatives joined by `|` share one arm and one body. An or-pattern can be the pattern of an arm or the pattern of a field inside a constructor pattern (`Some(value: Light.Red | Light.Yellow)`). The following rules apply.
+An or-pattern joins alternatives with `|` so they share a single arm body. It can appear as an arm's pattern or within a constructor field pattern (`Some(value: Light.Red | Light.Yellow)`). The following rules apply.
 
 - Every alternative binds the same names, each at the same type. A name that one alternative lacks or adds is `E0350`; a name with a different type in another alternative is `E0301`. The body sees each name once.
 - An alternative is a literal or a case. `_` and a bare name match every value and would leave the other alternatives dead, so they are `E0351`.
@@ -321,7 +321,7 @@ A `match` must cover all values of the scrutinee. If it does not, the error is `
 - Literals of `Int` and `String` cannot cover the whole type. A `match` with only literal patterns needs a `_` or a name case.
 - Each alternative of an or-pattern counts as one row. `Light.Red | Light.Yellow` alone does not cover `Light.Green` (`E0305`).
 
-There is no treatment in which an uncovered case fails at run time; it is rejected at compile time (check time). As a result, when a case is added to a variant, every place that matches on that variant is found by the check.
+Missing cases are rejected at compile time, rather than left to fail at run time. When you add a variant case, the checker identifies matches that no longer cover every case.
 
 ```cernith-error E0305
 module guide.exhaustive;

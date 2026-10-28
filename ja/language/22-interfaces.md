@@ -1,8 +1,8 @@
 # インターフェース
 
-**インターフェース**は、プログラムが自分で宣言する境界です。型が持つと約束する関数を並べ、約束が守るべき法則を述べることもできます。型は、明示的な `impl` で約束します。ジェネリック関数は、`<T: Priced>` のように境界を書いて、約束を求めます。
+**インターフェース**は、プログラムで宣言できる独自の境界です。型に求める関数を並べ、それらが満たすべき法則も記述できます。型は明示的な `impl` によってインターフェースを実装します。ジェネリック関数では、`<T: Priced>` のように境界を付けて、その実装を要求します。
 
-何かを探したり、推測したりすることはありません。呼び出しで使われる `impl` は、引数の型で決まります。`impl` がなければ、呼び出しの位置でエラーです（`E0316`）。
+呼び出しで使う `impl` は、引数の型から決まります。対応する `impl` がなければ、呼び出し箇所でエラー `E0316` になります。
 
 ## 最初の例
 
@@ -74,7 +74,7 @@ example label_names_the_item_and_its_price for label {
 }
 ```
 
-`Priced` がインターフェースです。`Book` と `Pen` は、それぞれ `impl` で `Priced` を約束します。`bill` と `label` は、約束した型すべてに使えるジェネリック関数です。`cernith test` は example を実行し、さらに法則 `never_negative` を、生成した `Book` と `Pen` の値で実行します。
+この例では、`Priced` がインターフェースで、`Book` と `Pen` がそれぞれ `impl` で実装しています。`bill` と `label` は、`Priced` を実装するすべての型で使えるジェネリック関数です。`cernith test` は example に加え、法則 `never_negative` も、生成した `Book` と `Pen` の値を使って検査します。
 
 この章の以下では、各部分を順に見ます。
 
@@ -92,10 +92,10 @@ example label_names_the_item_and_its_price for label {
 ```
 
 - `Self` は、インターフェースを実装する型を表します。インターフェースの中でだけ書けます。
-- **メソッド署名**は、名前、ラベル付きのパラメータ、戻り値の型、そして省略できる `uses` から成ります。本体はなく、`requires` も `ensures` も書けません。メソッドに何を期待するかは、法則が述べます。
+- **メソッドのシグネチャ**には、名前、ラベル付きパラメータ、戻り値の型、必要に応じて `uses` を書きます。本体や `requires`、`ensures` は書けません。メソッドに求める性質は法則で記述します。
 - メソッドは、パラメータか戻り値に `Self` を含まなければなりません。`Self` がないメソッドは、どの型の `impl` を使うか決められないからです（`E1401`）。
 - メソッドは自分の型パラメータを持てず、インターフェースも型パラメータを持てません（`E1401`）。
-- **法則**は、`Self` の値についての property です。本体は `Bool` の式で、メソッドを裸の名前で呼びます。`requires` の行は、それが退ける場合を捨てます。`property` と同じです（[16 テスト](16-testing.md)）。
+- **法則**は、`Self` の値についての property です。本体は `Bool` の式で、メソッドはモジュール名を付けずに呼び出します。`requires` を満たさないケースは、`property` と同じように除外されます（[16 テスト](16-testing.md)）。
 - インターフェースは境界の名前であって、型ではありません。`fn cost(item: Priced) -> Int` はエラーです（`E1405`）。型パラメータを書きます：`fn cost<T: Priced>(item: T) -> Int`。
 
 ```cernith-error E1401
@@ -132,7 +132,7 @@ impl パス.インターフェース for 型 derive;
 ```
 
 - `型` は名前のある型です。レコード、バリアント、`distinct` 型や制約付き型、プレリュードの型（`Int`、`String`、`List<T>`、`Option<T>` など）です。型パラメータや関数型は書けません。
-- メソッドには `pub` を付けません。`impl` にも `pub` を付けません。`impl` は、そのインターフェースと型が見える場所ならどこでも見えます。
+- メソッドにも `impl` にも `pub` は付けません。インターフェースと型の両方を参照できる場所であれば、その `impl` も利用できます。
 - `impl` の型パラメータは、すべて `型` の中に現れなければなりません。パラメータの境界は、メソッドの本体で使えます。`impl<T: Priced> Priced for List<T>` は、要素が `Priced` であるすべてのリストの `impl` です。
 - インターフェースは、自分のモジュールの中では `名前`、それ以外では `エイリアス.名前` と書きます。ほかのモジュールの名前と同じです。
 - `derive;` は、メソッドをコンパイラに書かせます。使えるのは `Show`、`Encode`、`Decode` で、[std.show](../stdlib/show.md) と [std.codec](../stdlib/codec.md) で説明します。
@@ -163,7 +163,7 @@ impl Priced for Pen {
 
 `impl` は、引数の型で決まります。`price(item: Pen(color: "red"))` は `Pen` の `impl`、`price(item: [Pen(color: "red")])` は `List<T>` の `impl` を使います。メソッドは、`apply: price` のように、値として渡すこともできます。
 
-`Self` が戻り値にしか現れないときは、どの `impl` を使うかを教える引数がありません。`fresh::<Int>(seed: 1)` のように、`::<T>` で型を書きます。標準ライブラリにも、このようなメソッドがあります。`codec.decode::<Point>(value: v)` です。文脈で型がすでに決まっている場合（たとえば、戻り値の型が `Int` の関数の結果として呼ぶ場合）は、`::<T>` がなくても受け付けられます。何も型を決めなければ、`E0320` です（[06 関数](06-functions.md)）。
+`Self` が戻り値にしか現れない場合、引数からは `impl` を決められません。`fresh::<Int>(seed: 1)` のように `::<T>` で型を明示します。標準ライブラリの `codec.decode::<Point>(value: v)` も同じ形です。ただし、戻り値の型が `Int` の関数の最後の式として使う場合など、文脈から型が決まるなら `::<T>` は省略できます。型が決まらなければ `E0320` になります（[06 関数](06-functions.md)）。
 
 ```cernith
 module guide.fresh;
@@ -291,7 +291,7 @@ report.cnth   module report;   pub record Tile { ... }
 
 `impl shapes.Area for report.Tile` は、`shapes` にも `report` にも書けます。両方を `import` する 3 つ目のモジュールに書くと、`E1402` です。
 
-`List<Int>` と `List<String>` は同じ型構成子なので、1 つのインターフェースに別々の `impl` は持てません。2 通りの振る舞いが欲しいプログラムは、関数を 2 つ書くか、ラッパー型を使います。
+`List<Int>` と `List<String>` は同じ型構成子を使うため、同じインターフェースに対して別々の `impl` は定義できません。2 通りの振る舞いを用意するには、関数を分けるか、ラッパー型を使います。
 
 ```cernith-error E1402
 module guide.priced;
@@ -375,7 +375,7 @@ failed   property guide.refunds.law_Priced_never_negative_for_Refund  counterexa
 
 ## Eq と Ord
 
-`Eq` と `Ord` は、そのままです。`==` と `<` に `impl` は要らず、利用者が `impl Eq` や `impl Ord` を書くと `E1402` です。
+`Eq` と `Ord` は、引き続き組み込みの境界です。`==` と `<` に `impl` は不要で、ユーザーが `impl Eq` や `impl Ord` を定義すると `E1402` になります。
 
 ```cernith-error E1402
 module guide.order;

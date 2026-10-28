@@ -1,8 +1,8 @@
 # std.bytes
 
-`Bytes`（0 から 255 の整数の列）を作り、読み、加工する関数のモジュールです。`Bytes` はプレリュードの型で、リテラルはありません（[03 型](../language/03-types.md)）。このモジュールの関数を使うには、`import std.bytes;` と書き、`bytes.length(bytes: data)` のように呼びます。モジュールの別名 `bytes` と引数のラベル `bytes` は別のものです。
+`Bytes`（0 から 255 の整数の列）の作成・読み出し・加工を行うモジュールです。`Bytes` はプレリュードの型で、専用のリテラルはありません（[03 型](../language/03-types.md)）。`import std.bytes;` で読み込み、`bytes.length(bytes: data)` のように呼び出します。モジュールの別名と引数ラベルは、どちらも `bytes` ですが、役割は異なります。
 
-`Bytes` は他の値と同じく、変更できない値です。`==` は長さと各要素が等しいかを比べます。大小の比較はありません。要素を書き換える `bytes.set` と `bytes.fill` は、元の列を変えずに、書き換えた新しい列を返します。位置は 0 から数えます。
+`Bytes` は不変です。`==` では長さと各要素を比較でき、大小比較はできません。`bytes.set` や `bytes.fill` は元の列を書き換えず、変更を反映した新しい列を返します。位置は 0 から数えます。
 
 すべての関数は純粋で、効果を持ちません。事前条件（`requires`）を満たさない呼び出しは欠陥です（[12 エラーと欠陥](../language/12-errors-and-defects.md)）。外部から来るデータ（文字列、リスト）を `Bytes` に変える関数（`from_list`、`from_hex`、`from_base64`）と、`Bytes` を文字列に戻す `to_text` は、変換できない入力に対して欠陥ではなく `None` を返します。
 
@@ -76,7 +76,7 @@ pub fn to_list(bytes: Bytes) -> List<Int>
 
 `from_list` は、`List<Int>` を `Bytes` にします。すべての要素が 0 から 255 のときは `Some`、1 つでも範囲の外（256 以上、負）なら `None` です。空のリストは `Some` で、空の列になります。`to_list` は逆で、要素を `List<Int>` にします。結果の長さは `bytes.length` と同じで、要素は 0 から 255 です。
 
-なぜ `from_list` が `Option` を返すのか：`List<Int>` は、どんな整数でも持てるからです。範囲の外の要素は、呼び出し側が事前に防ぐのではなく、`None` として受け取ります。
+`from_list` が `Option` を返すのは、`List<Int>` にバイトの範囲外の整数が含まれる可能性があるためです。呼び出し側で事前に除外する必要はなく、`None` として処理できます。
 
 - `bytes.from_list(items: [0, 255])` → `Some(value: ...)`（要素が `[0, 255]` の `Bytes`）
 - `bytes.from_list(items: [])` → `Some(value: bytes.empty())`
@@ -90,7 +90,7 @@ pub fn to_list(bytes: Bytes) -> List<Int>
 pub fn length(bytes: Bytes) -> Int
 ```
 
-バイト数を返します。文字数ではありません（`bytes.from_text` で `String` から作ったときは、文字数と一致するとは限りません）。
+バイト数を返します。`bytes.from_text` で `String` から作った場合、文字数とは一致しないことがあります。
 
 - `bytes.length(bytes: bytes.from_text(text: "é"))` → `2`
 
@@ -129,7 +129,7 @@ pub fn set(bytes: Bytes, index: Int, value: Int) -> Bytes
 - `bytes.set(bytes: bytes.new(count: 1, fill: 0), index: 0, value: 256)` → 欠陥
 - `bytes.set(bytes: bytes.new(count: 1, fill: 0), index: 0, value: -1)` → 欠陥
 
-元の列が変わらないことは、`example` で確かめます（`set_keeps_the_original`）。
+元の列が変わらないことは、`set_keeps_the_original` の example で確認しています。
 
 ### bytes.fill
 
@@ -143,7 +143,7 @@ pub fn fill(bytes: Bytes, from: Int, to: Int, value: Int) -> Bytes
 
 事後条件：結果の長さは元の列と同じです。
 
-端の場合：`from == to` なら、何も変わりません。
+境界条件：`from == to` なら、何も変わりません。
 
 - `bytes.to_list(bytes: bytes.fill(bytes: bytes.new(count: 4, fill: 1), from: 1, to: 3, value: 9))` → `[1, 9, 9, 1]`
 - `bytes.to_list(bytes: bytes.fill(bytes: bytes.new(count: 2, fill: 1), from: 1, to: 1, value: 9))` → `[1, 1]`
@@ -192,7 +192,7 @@ pub fn starts_with(bytes: Bytes, prefix: Bytes) -> Bool
 
 `find` は、列 `pattern` が最初に現れる位置を返します。現れなければ `None` です。`index_of` は、1 つのバイト `value` が最初に現れる位置を返します。現れなければ `None` です。`starts_with` は、`bytes` が `prefix` で始まるなら `true` です。事前条件はありません。
 
-端の場合：`pattern` や `prefix` が空の列なら、`bytes` が空でも、`find` は `Some(value: 0)`、`starts_with` は `true` です。`pattern` が `bytes` より長ければ `None` です。`index_of` に 0 から 255 の外の `value` を渡しても欠陥ではなく、どのバイトとも等しくないので `None` です。
+境界条件：`pattern` や `prefix` が空の列なら、`bytes` が空でも、`find` は `Some(value: 0)`、`starts_with` は `true` です。`pattern` が `bytes` より長ければ `None` です。`index_of` に 0 から 255 の外の `value` を渡しても欠陥ではなく、どのバイトとも等しくないので `None` です。
 
 - `bytes.find(bytes: bytes.from_text(text: "abcabc"), pattern: bytes.from_text(text: "ca"))` → `Some(value: 2)`
 - `bytes.find(bytes: bytes.from_text(text: "abc"), pattern: bytes.from_text(text: "x"))` → `None`
@@ -325,7 +325,7 @@ pub fn to_text(bytes: Bytes) -> Option<String>
 
 空の列は `Some(value: "")` です。バイト 0 は U+0000 として読まれ、バイト順マーク（`[239, 187, 191]`、U+FEFF）も取り除かれずに、文字として残ります。`to_text(from_text(s))` は、どんな `s` でも `Some(value: s)` です。
 
-なぜ `to_text` が `Option` を返すのか：`Bytes` はどんなバイトの並びでも持てますが、`String` は Unicode スカラー値の列だからです。正しくない並びは、置き換え文字などに変えずに、`None` として受け取ります。
+`to_text` が `Option` を返すのは、すべてのバイト列が Unicode スカラー値の列として正しいわけではないためです。不正な UTF-8 は置換文字などで補わず、`None` として返します。
 
 - `bytes.to_list(bytes: bytes.from_text(text: "aé€😀"))` → `[97, 195, 169, 226, 130, 172, 240, 159, 152, 128]`
 - `bytes.to_list(bytes: bytes.from_text(text: ""))` → `[]`
@@ -382,14 +382,14 @@ pub fn from_base64(text: String) -> Option<Bytes>
 
 標準の Base64（文字は `A` から `Z`、`a` から `z`、`0` から `9`、`+`、`/`）です。3 バイトを 4 文字にし、最後の端数は `=` で 4 文字に揃えます。
 
-`to_base64` は、常にこの形（`=` の詰め物つき）で書きます。
+`to_base64` は、常に `=` でパディングした形式で出力します。
 
 `from_base64` は、**正規の形だけ**を受け付けます。次の入力は `None` です。
 
-- 長さが 4 の倍数でない（`=` の詰め物を省いた形など）
+- 長さが 4 の倍数でない（パディングの `=` を省略した形式を含む）
 - Base64 の文字でも `=` でもない文字を含む（空白、改行、URL 向けの `-` と `_` を含む）
 - `=` が、最後の 4 文字の末尾の 1 つか 2 つ以外の位置にある
-- 詰め物の分の余りのビットが 0 でない（`to_base64` が書かない形）
+- パディング部分の未使用ビットが 0 でない（`to_base64` が出力しない形式）
 
 空の文字列は `Some(value: bytes.empty())` です。
 
@@ -624,7 +624,7 @@ example set_gives_a_new_sequence for set_keeps_the_original {
 }
 ```
 
-整数の読み書きの例です。`encode_header` は、1 バイトの版番号と 2 バイトの長さ（ビッグエンディアン）を並べたヘッダを作り、`read_length` はその長さを読み戻します。
+整数の読み書きの例です。`encode_header` は、1 バイトのバージョン番号と 2 バイトの長さ（ビッグエンディアン）からなるヘッダーを作り、`read_length` はその長さを読み戻します。
 
 ```cernith
 module guide.bytes_numbers;

@@ -1,6 +1,6 @@
 # std.fs
 
-ファイルとフォルダを、ケイパビリティを通して読み書きするモジュールです。`import std.fs;` と書き、`fs.read_text(access: ..., path: ...)` のように呼びます。どの関数も、`access:` で受け取ったケイパビリティの**ルート**（フォルダ）の下のパスにしか触れません。
+ケイパビリティを通じて、ファイルやフォルダを読み書きします。`import std.fs;` で読み込み、`fs.read_text(access: ..., path: ...)` のように呼び出します。操作できるのは、`access:` で受け取ったケイパビリティの**ルート**フォルダ以下のパスだけです。
 
 使うケイパビリティは 2 つです。`Fs` はルートの下を読み書きでき、`ReadOnlyFs` は読むだけです。どちらも、プログラムの `manifest` 宣言にルートを書いて求め、`main` の第 2 引数として受け取ります。ほかの場所では作れません（エラー `E1301`）。ファイルを使う関数は、ケイパビリティを引数に取り、`uses io` も宣言します（[17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)）。
 
@@ -146,7 +146,7 @@ pub fn keep(
 }
 ```
 
-ファイルを丸ごと読み書きするだけなら、`read_text`、`write_text` などの一括の関数が、`using` を内部で書いてくれます。
+ファイル全体を読み書きする場合は、`read_text` や `write_text` などの一括操作を使えます。これらは内部で `using` を処理します。
 
 ## 関数一覧
 
@@ -207,7 +207,7 @@ pub fn keep(
 | `fs.lines_of(text)` | `List<String>` | テキストを行に分ける |
 | `fs.describe(error)` | `String` | `FsError` を文字列にする |
 
-読む関数（`is_folder` と `metadata` を含む）は `ReadOnlyFs` を、書く関数と `append_text`、`append_bytes`、`replace_text`、`replace_bytes`、`make_folder`、`rename`、`remove`、`narrow` は `Fs` を受け取ります。`Fs` で読むには、`fs.read_only(access: files)` で変えます。読むだけの関数の引数は、`ReadOnlyFs` と書くのがよい形です。そうすると、その関数が書き込まないことが、型から分かります。
+読み取り関数（`is_folder` と `metadata` を含む）は `ReadOnlyFs` を受け取ります。書き込み関数のほか、`append_text`、`append_bytes`、`replace_text`、`replace_bytes`、`make_folder`、`rename`、`remove`、`narrow` は `Fs` を受け取ります。`Fs` で読み取るには、`fs.read_only(access: files)` で変換します。読み取りだけを行う関数では、引数の型を `ReadOnlyFs` にすると、書き込みをしないことを型で示せます。
 
 ```cernith-error E0301
 module guide.fs_read_only_cannot_write;
@@ -305,7 +305,7 @@ pub fn replace_bytes(
 ) -> Result<Unit, FsError> uses io
 ```
 
-`text` か `bytes` をファイルの内容全体として書きます。途中でクラッシュしても、古い内容か新しい内容のどちらかが残り、混ざることはありません。バイト列は同じフォルダの一時ファイル（`.NAME.cernith-tmp`）に書かれ、フラッシュされてから、その一時ファイルが対象の上にリネームされます。`write_text` と `write_file_bytes` は先にファイルを空にするので、クラッシュすると空のまま、あるいは途中まで書かれたままになることがあります。対象がなければ作られます。フォルダがなければ結果は `NotFound`、パスがルートの外なら `Denied` です。
+`text` または `bytes` でファイル全体を置き換えます。途中でクラッシュしても、古い内容と新しい内容が混在することはありません。同じフォルダの一時ファイル（`.NAME.cernith-tmp`）に書き込み、フラッシュしたあと、そのファイルを対象のパスにリネームします。一方、`write_text` と `write_file_bytes` は先に対象を空にするため、クラッシュすると空の状態や書きかけの状態が残ることがあります。対象ファイルがなければ作成します。フォルダがない場合は `NotFound`、パスがルート外の場合は `Denied` になります。
 
 ### fs.open_read と fs.open_write
 
@@ -403,7 +403,7 @@ pub fn metadata(
 ) -> Result<Entry, FsError> uses io
 ```
 
-パスが何であるかを、リンクをたどらずに返します。`name` はパスの最後の部分、`kind` は `File`、`Folder`、`Link` のいずれか、`size` はファイルのバイト数（フォルダとリンクは 0）です。`modified_ms` は最後に書き込んだ時刻で、1970-01-01 UTC からのミリ秒です。シミュレート世界は時刻を持たず、0 を返します。
+リンクをたどらずに、パスのメタデータを返します。`name` はパスの最後の部分、`kind` は `File`、`Folder`、`Link` のいずれか、`size` はファイルのバイト数（フォルダとリンクでは 0）です。`modified_ms` は最終更新時刻を 1970-01-01 UTC からのミリ秒で表します。シミュレート世界では時刻を記録せず、0 を返します。
 
 存在しないパスはエラーではなく、`kind: EntryKind.Missing` の `Ok` になります。ルートの外のパスは `Err(error: FsError.Denied(path: ...))` です。
 
@@ -413,7 +413,7 @@ pub fn metadata(
 pub fn make_folder(access: Fs, path: String) -> Result<Unit, FsError> uses io
 ```
 
-フォルダと、ないときはその上のフォルダを、`mkdir -p` のように作ります。すでにあるフォルダはエラーではありません。実際のファイルシステムでは、パスの途中がファイルだと、結果は `Err` です（システムによって `NotFound` や `Failed` など）。シミュレート世界はファイルだけを持ちます。フォルダは、その下にファイルがある間だけ存在し、`make_folder` は何も残さずに成功します。
+`mkdir -p` と同じように、必要な親フォルダも含めてフォルダを作成します。すでに存在する場合はエラーになりません。実際のファイルシステムでは、パスの途中にファイルがあると `Err` になります（種類はシステムによって `NotFound` や `Failed` など）。シミュレート世界が保持するのはファイルだけです。フォルダは配下にファイルがある場合にのみ存在し、`make_folder` は状態を変えずに成功します。
 
 ### fs.rename
 
@@ -441,7 +441,7 @@ pub fn remove(access: Fs, path: String) -> Result<Unit, FsError> uses io
 pub fn read_only(access: Fs) -> ReadOnlyFs
 ```
 
-同じルートの、読むだけのケイパビリティを返します。元の `Fs` より多くのことはできません。
+ルートが同じ読み取り専用のケイパビリティを返します。元の `Fs` を超える権限は持ちません。
 
 ### fs.narrow と fs.narrow_read_only
 
@@ -472,7 +472,7 @@ pub fn read_only_root_of(access: ReadOnlyFs) -> String
 pub fn lines_of(text: String) -> List<String>
 ```
 
-テキストを行に分けます。区切りは `\n` で、直前の `\r` は取り除きます。最後の行の終わりの改行は、新しい行を始めません。空のテキストは `[]` で、`"\n"` だけのテキストは `[""]`（空の行が 1 つ）です。
+テキストを行に分割します。区切りは `\n` で、その直前の `\r` も取り除きます。末尾の改行によって余分な行が追加されることはありません。空のテキストは `[]`、`"\n"` だけなら `[""]`（空行が 1 つ）になります。
 
 ### fs.describe
 
@@ -1160,7 +1160,7 @@ example split_lines_splits_at_line_feeds for split_lines {
 
 ### 追記、置き換え、名前の変更、パスの種類の確認
 
-ログに追記し、状態ファイルを置き換え、ファイルをアーカイブのフォルダへ移し、パスが何かを尋ねる例です。
+ログへの追記、状態ファイルの置き換え、アーカイブフォルダへの移動、パスのメタデータの取得を行う例です。
 
 ```cernith
 module guide.fs_edits;

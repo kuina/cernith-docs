@@ -1,6 +1,6 @@
 # Units of measure
 
-A number can carry a unit, and the checker keeps units apart. Adding a length to a time is an error, and dividing a distance by a time gives a speed. Units exist only in the checker: the verifier and every target see the plain `Float64` or `Int`, so a unit costs nothing at run time.
+Numbers can carry units, which the checker tracks through calculations. Adding a length to a time is an error; dividing a distance by a time gives a speed. Units exist only during type checking. The verifier and all targets use the underlying `Float64` or `Int`, with no runtime cost for units.
 
 ## Declaring a unit
 
@@ -35,7 +35,7 @@ pub fn read(length: Float64<m>) -> Float64 {
 
 ### Canonical form
 
-A unit has exactly one text. A unit that is written in another way is `E0362`, and the message gives the canonical text.
+Each unit has a single canonical spelling. Any other spelling produces `E0362`, with the canonical form shown in the diagnostic.
 
 - The factors on each side are sorted by name (`m * s`, not `s * m`).
 - A power is written once (`m^2`, not `m * m`).
@@ -54,7 +54,7 @@ pub fn area(width: Float64<m * m>) -> Float64<m^2> {
 
 ## Making and reading a quantity
 
-The constructor has the name of the unit. `m(value: 5.0)` has the type `Float64<m>`, and `m(value: 5)` has the type `Int<m>`. `length.value` is the plain number of a quantity. Both are the identity at run time.
+A unit's name also serves as its constructor: `m(value: 5.0)` produces a `Float64<m>`, and `m(value: 5)` produces an `Int<m>`. Use `length.value` to extract the underlying number. Neither operation changes the number at run time.
 
 | Expression | Meaning |
 | --- | --- |
@@ -174,7 +174,7 @@ pub fn longer(length: Float64<m>) -> Float64<m> {
 
 ## Conversions and library functions
 
-A conversion between units is a function that the program writes. It reads the number with `.value` and makes the new quantity with the constructor. The factor is a plain number.
+Write an explicit function to convert between units. Extract the number with `.value`, apply a unitless conversion factor, and use the new unit's constructor.
 
 Library functions take plain numbers. Write `.value` for the argument and make the result a quantity again.
 

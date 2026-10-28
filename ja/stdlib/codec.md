@@ -1,8 +1,8 @@
 # std.codec
 
-フォーマットから見たデータの形と、型の値をその形に変え、また戻す 2 つのインターフェース、`Encode` と `Decode` のモジュールです。使うには `import std.codec;` と書き、メソッドを `codec.encode(value: x)` や `codec.decode::<T>(value: v)` のように呼びます。
+データの共通表現と、それに変換する `Encode`、そこから復元する `Decode` の 2 つのインターフェースを提供します。`import std.codec;` で読み込み、`codec.encode(value: x)` や `codec.decode::<T>(value: v)` のように呼び出します。
 
-形は `Value` です。フォーマット（ツールやライブラリのテキスト形式）は、`Value` と自分のテキストとの変換を、一度だけ書きます。すると、`Encode` と `Decode` の `impl` を持つ型は、すべてそのフォーマットを持ちます。`impl codec.Encode for T derive;` は、レコードやバリアントの `impl` を書きます。2 つのインターフェースは、[22 インターフェース](../language/22-interfaces.md) で説明しています。
+共通表現には `Value` を使います。ツールやライブラリでテキスト形式を扱う際に、その形式と `Value` の相互変換を一度実装すれば、`Encode` と `Decode` を実装したすべての型でその形式を使えます。レコードやバリアントでは、`impl codec.Encode for T derive;` で実装を自動生成できます。両インターフェースについては、[22 インターフェース](../language/22-interfaces.md) を参照してください。
 
 ## Value
 
@@ -33,7 +33,7 @@ pub interface Decode {
 }
 ```
 
-`Decode` では、`Self` が戻り値にしか現れないので、呼び出しは型を書きます：`codec.decode::<Point>(value: v)`。書かなければ、型が文脈から決まらなければならず、決まらなければ `E0320` です（[22 インターフェース](../language/22-interfaces.md)）。
+`Decode` の `Self` は戻り値にしか現れないため、通常は `codec.decode::<Point>(value: v)` のように型を明示します。省略する場合は文脈から型が決まる必要があり、決まらなければ `E0320` になります（[22 インターフェース](../language/22-interfaces.md)）。
 
 ## impl がある型
 
@@ -57,7 +57,7 @@ pub interface Decode {
 | `Ok(value: x)` と `Err(error: x)` | フィールド `value` を持つ `Ok` という名前の `Case`、フィールド `error` を持つ `Err` という名前の `Case` |
 
 - `Some(value: None)` は `None` と同じに変換されるので、読み戻したときに区別できません。区別が必要なフォーマットは、レコードを使えます。
-- 数は広がりません。`Float64` を読むには `Float` が必要で、`Int` の値はエラーです。
+- 数値型の自動変換は行いません。`Float64` のデコードには `Float` が必要で、`Int` の値を渡すとエラーになります。
 - `Option<T>` を読むと、`Null` は `None` に、`T` として読めるほかの値は `Some(value: x)` になります。
 
 ## 導出される impl
@@ -72,7 +72,7 @@ pub interface Decode {
 | 要素の型が違う | `.marks[1]` | `expected an Int, found a String` |
 | ケースの名前が未知 | （空） | `Shape has no case Circle` |
 
-ほかの形が必要な型は、2 つのメソッドを自分で書きます。次の例は、導出できない `distinct` 型でそうしています。`Meters` を、ただの `Int` として書きます。
+異なる表現を使いたい場合は、両メソッドを自分で実装します。次の例では、`Meters` を単位のない `Int` としてエンコードします。`Meters` は `distinct` 型なので、実装は自動導出できません。
 
 ## 関数一覧
 
@@ -86,7 +86,7 @@ pub interface Decode {
 | `codec.unknown_case(type_name, name)` | `DecodeError` | バリアントにないケース名のエラー |
 | `codec.describe(value)` | `String` | `Value` の種類の短い説明。メッセージ用 |
 
-最後の 5 つは、導出される `decode` の部品です。手で書く `decode` でも使えるように、公開されています。
+最後の 5 つは、導出される `decode` が内部で使う補助関数です。独自の `decode` の実装でも使えるよう、公開されています。
 
 ## 関数の詳細
 
@@ -96,7 +96,7 @@ pub interface Decode {
 pub fn field<T: Decode>(fields: List<Field>, name: String) -> Result<T, DecodeError>
 ```
 
-`name` という名前の最初のフィールドを探し、その値を `T` として読みます。読むのに失敗すると、エラーの `path` は、`.name` に値の中の `path` を続けたものです。そのようなフィールドがなければ、エラーは空の `path` と `there is no field name` です。型を書きます：`codec.field::<Int>(fields: fields, name: "x")`。
+`name` に一致する最初のフィールドを探し、その値を `T` としてデコードします。デコードに失敗すると、エラーの `path` は `.name` に値の内部でのパスを続けたものになります。フィールドが見つからない場合は、`path` が空のエラー `there is no field name` を返します。呼び出しでは `codec.field::<Int>(fields: fields, name: "x")` のように型を指定します。
 
 ### codec.record_fields と codec.case_parts
 
@@ -125,7 +125,7 @@ pub fn describe(value: Value) -> String
 
 ## 例
 
-導出される `impl` と、`distinct` 型のために手で書いた 1 組です。
+`impl` の自動導出と、`distinct` 型に対する独自実装の例です。
 
 ```cernith
 module guide.wire;
@@ -306,7 +306,7 @@ example none_is_null_and_some_is_the_value for encode_tagged {
 }
 ```
 
-`codec.record_fields` と `codec.field` を使って手で書いた `Point` の `impl` です。
+`codec.record_fields` と `codec.field` を使って、`Point` の `impl` を自分で定義する例です。
 
 ```cernith
 module guide.handwritten;

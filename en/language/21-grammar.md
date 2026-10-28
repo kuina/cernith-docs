@@ -15,9 +15,9 @@ uppercase name           kind of token produced by the lexer
 lowercase name           nonterminal of the grammar
 ```
 
-The token kinds are `IDENT` (a lowercase name), `TYPE_IDENT` (an uppercase name), `INT`, `FLOAT`, and `STRING`. Whitespace and comments do not appear in the grammar. The grammar is a context-free grammar over the tokens produced by the lexer, and it does not depend on layout.
+The token kinds are `IDENT` (a lowercase name), `TYPE_IDENT` (an uppercase name), `INT`, `FLOAT`, and `STRING`. Whitespace and comments are omitted. This context-free grammar operates on tokens produced by the lexer and is independent of layout.
 
-The grammar reads a wider language than canonical form accepts. Arguments without labels, a `var` without a type annotation, non-canonical formatting, and so on can be read grammatically, and later stages reject them with individual diagnostics. The syntax error (`E0001`) is for text that cannot be read at all.
+The parser accepts some forms that later checks reject, including unlabeled arguments, `var` declarations without type annotations, and non-canonical formatting. These receive specific diagnostics. Syntax error `E0001` is reserved for text that cannot be parsed.
 
 ## Files and definitions
 
@@ -141,7 +141,7 @@ or_pattern      = pattern { "|" pattern } ;
 
 ## Expressions
 
-They are listed from the lowest precedence to the highest.
+The rules below run from lowest to highest precedence.
 
 ```text
 expr            = quantifier | blocklike | implies_expr ;
@@ -182,7 +182,7 @@ fn_lit          = "fn" "(" [ param_list ] ")" "->" type [ "uses" effect_list ] f
 
 ## Precedence table
 
-From the strongest binding to the weakest.
+Operators are listed from highest to lowest precedence.
 
 | Strength | Operators | Associativity |
 | --- | --- | --- |

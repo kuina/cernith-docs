@@ -1,8 +1,8 @@
 # std.word32 and std.word64
 
-Two modules that handle unsigned 32-bit and 64-bit integers (**words**) with wrap-around arithmetic. They are used when computing modulo 2³² or 2⁶⁴, as in hashes, checksums, and encodings. Import them separately with `import std.word32;` and `import std.word64;`, and call functions as in `word32.add(first: a, second: b)` and `word64.add(first: a, second: b)`.
+These modules provide wraparound arithmetic on unsigned 32-bit and 64-bit integers, or **words**. Use them for calculations modulo 2³² or 2⁶⁴, such as hashes, checksums, and encodings. Import them separately with `import std.word32;` and `import std.word64;`, then call functions such as `word32.add(first: a, second: b)` or `word64.add(first: a, second: b)`.
 
-The functions of the two modules have the same names and signatures; the only difference is the word length (32 or 64). Below, the word length is written `N`, which is 32 or 64.
+Both modules have the same function names and signatures; only the word width differs. Below, `N` denotes that width: 32 or 64.
 
 ## Words
 

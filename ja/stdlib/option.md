@@ -1,8 +1,8 @@
 # std.option
 
-`Option<T>` を扱う関数のモジュールです。`Option<T>` は、値があること（`Some(value: x)`）か、無いこと（`None`）を表す型で、プレリュードにあります。このモジュールの関数を使うには、`import std.option;` と書き、`option.map(...)` のように呼びます。
+値がある場合（`Some(value: x)`）とない場合（`None`）を表す、プレリュードの型 `Option<T>` を操作するモジュールです。`import std.option;` で読み込み、`option.map(...)` のように呼び出します。
 
-値を取り出す基本の方法は `match` です（[07 レコードとバリアント](../language/07-records-and-variants.md)）。このモジュールの関数は、よくある `match` の定型を短く書くためのものです。
+`Option` は、基本的には `match` で場合分けして扱います（[07 レコードとバリアント](../language/07-records-and-variants.md)）。このモジュールでは、よく使う処理を短く書ける関数を提供します。
 
 ## 関数一覧
 
@@ -47,7 +47,7 @@ pub fn and_then<T, U, effect E>(
 pub fn unwrap_or<T>(option: Option<T>, default: T) -> T
 ```
 
-`None` の場合の値を与えて、`Option` を外します。`default` は、`Some` の場合でも評価されます（Cernith は、引数を先に評価します）。
+`Some` なら中の値を、`None` なら `default` を返します。Cernith は引数を先に評価するため、`Some` の場合も `default` は評価されます。
 
 ### option.ok_or
 
@@ -64,7 +64,7 @@ pub fn is_some<T>(option: Option<T>) -> Bool
 pub fn is_none<T>(option: Option<T>) -> Bool
 ```
 
-中身が必要でなく、あるかないかだけを知りたいときに使います。`==` による比較（`option == None`）は、`T` が等価比較できるときにしか書けませんが、この 2 つは `T` によらず使えます。
+値の中身を使わず、有無だけを確認したいときに使います。`==` による比較（`option == None`）には `T` の等価比較が必要ですが、この 2 つの関数は `T` に関係なく使えます。
 
 ## 例
 

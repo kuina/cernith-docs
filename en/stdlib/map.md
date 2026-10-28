@@ -1,6 +1,6 @@
 # std.map
 
-This module provides `Map<K, V>`, a table that maps keys to values. The key type `K` must be an ordered type (`Ord`). To use the functions of this module, write `import std.map;` and call them as in `map.insert(...)`.
+This module provides `Map<K, V>`, a collection of key-value pairs. Keys must satisfy `Ord`. Import it with `import std.map;` and call functions such as `map.insert(...)`.
 
 A `Map` is a value. `map.insert` and `map.remove` do not modify the original map; they return a new one.
 
@@ -31,7 +31,7 @@ pub variant Tree<K, V> {
 
 - `Entry<K, V>` is a pair of a key and a value. `map.entries`, `map.first`, and `map.last` return it.
 - `Map<K, V>` is the map itself. Because `K` has an `Ord` bound, the only types usable as keys are `Int`, `Float64`, `String`, `Bool`, and `distinct` types and refined types built on them ([03 Types](../language/03-types.md)). Using a list or a record as the key is error `E0316`.
-- `Tree<K, V>` is the binary search tree inside a `Map`. `Tree` is public because it is the type of the field `root` of `Map`. There is no occasion for users to use `Tree`.
+- `Tree<K, V>` is the binary search tree used internally by `Map`. It is public because it is the type of `Map`'s `root` field, but users do not need to work with it directly.
 
 A `Map` is created and read with the functions of this module (`map.empty`, `map.insert`, and so on). Assembling a `Tree` value yourself and putting it in `Map(root: ...)` can be written as far as types go. However, the functions are written on the assumption that the tree satisfies rules such as “the keys are in ascending order from left to right,” so the results of the functions on a tree that violates the rules are not defined.
 
@@ -112,7 +112,7 @@ pub fn size<K: Ord, V>(map: Map<K, V>) -> Int {
 }
 ```
 
-The number of entries. Unlike counting the length of a list built with `entries`, it does not build a list.
+Returns the number of entries without constructing a list, unlike calling `entries` and measuring its length.
 
 ### map.entries
 

@@ -1,6 +1,6 @@
 # std.io, std.clock, and std.random
 
-Three small modules that handle standard input and output, the clock, and random numbers. Write `import std.io;`, `import std.clock;`, and `import std.random;`, and call their functions as in `io.write_line(...)`, `clock.now_ms()`, and `random.int_between(...)`.
+These three modules provide standard input/output, time, and random numbers. Import them with `import std.io;`, `import std.clock;`, and `import std.random;`, then call functions such as `io.write_line(...)`, `clock.now_ms()`, and `random.int_between(...)`.
 
 These three handle **ambient effects** (`io`, `clock`, `random`). To call them, it is enough for the function to declare the effect with `uses`; no capability needs to be received ([11 Effects](../language/11-effects.md)). Operations that go through an authority the program declares and receives, such as files, environment variables, and the network, are handled by other modules ([fs](fs.md), [env](env.md), [http](http.md), [console](console.md); for the mechanism, see [17 Resources and capabilities](../language/17-resources-and-capabilities.md)).
 
@@ -70,7 +70,7 @@ In tests, the value of the `now_ms` of the `World` is returned. This clock does 
 pub fn monotonic_ms() -> Int uses clock, io
 ```
 
-Returns the reading of a clock that never goes back, in milliseconds. Its start is unknown, so only the difference between two readings means something. Use it to measure how long something took. `now_ms` is the date and can be set back by the system. In a simulated world (`with_world`, `sim.with_sim`) it is the clock of the world, the same as `now_ms`. A target that has no such clock answers 0.
+Returns a monotonic clock reading in milliseconds. Its origin is unspecified; use the difference between two readings to measure elapsed time. Unlike this clock, `now_ms` reports wall-clock time and may be adjusted backward by the system. In a simulated world (`with_world`, `sim.with_sim`), both functions use the world's clock. Targets without a monotonic clock return 0.
 
 ### clock.sleep_ms
 
@@ -287,7 +287,7 @@ example pick_with_reversed_bounds_is_a_defect for pick {
 
 `io.read_all_lines`, `io.write_line`, and `clock.now_ms` are checked in the `guide.ambient` example above.
 
-The next example waits, measures the wait, and asks for random bytes. In a simulated world the wait takes no real time.
+The next example waits, measures elapsed time, and requests random bytes. The simulated wait takes no real time.
 
 ```cernith
 module guide.clock_and_bytes;

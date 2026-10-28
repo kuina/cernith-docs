@@ -1,8 +1,8 @@
 # std.test
 
-A module for trying out code that has effects (`io`, `clock`, `random`) from an `example` or a `property`. Write `import std.test;` and call it as in `test.with_world(world, run)`. `with_world` runs the function `run` inside a **simulated world** and returns the result together with the lines written in the meantime.
+This module lets `example` and `property` tests exercise code with effects (`io`, `clock`, `random`). Import it with `import std.test;` and call `test.with_world(world, run)`. `with_world` executes `run` in a **simulated world** and returns its result along with the lines written during execution.
 
-An `example` and a `property` can call only pure code (calling a function that has effects directly is error `E0403`). A function that uses input and output, the clock, or randomness can be turned into a test with fixed input and a fixed result by calling it inside `with_world`. How to write tests in general is described in [16 Testing](../language/16-testing.md).
+Calling effectful code directly from an `example` or `property` produces `E0403`. Use `with_world` to test input/output, time, or randomness with fixed inputs and reproducible results. For general testing syntax, see [16 Testing](../language/16-testing.md).
 
 ## Types and functions
 

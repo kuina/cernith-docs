@@ -1,6 +1,6 @@
 # std.console
 
-コマンドラインプログラムの標準入力・標準出力・標準エラー出力を、ケイパビリティ `Console` を通して扱うモジュールです。`import std.console;` と書き、`console.write_line(access: ..., text: ...)` のように呼びます。どの関数も、最初の引数に `access: console.Console` を取ります。
+ケイパビリティ `Console` を通じて、コマンドラインプログラムの標準入力・標準出力・標準エラー出力を扱います。`import std.console;` で読み込み、`console.write_line(access: ..., text: ...)` のように呼び出します。各関数の第 1 引数は `access: console.Console` です。
 
 `std.io`（[io-clock-random](io-clock-random.md)）は、`uses io` を宣言すれば誰でも呼べます。これに対して `std.console` の関数は、`Console` の値を受け取った関数からしか呼べません。`Console` は、プログラムの `manifest` 宣言に書くことで、`main` の第 2 引数として渡されます。ほかの場所では作れません（エラー `E1301`）。こうすると、ある関数が標準入出力を使うかどうかが、その関数の引数を見るだけで分かります（[17 リソースとケイパビリティ](../language/17-resources-and-capabilities.md)）。
 
@@ -19,7 +19,7 @@ pub variant Stream {
 }
 ```
 
-- `Console` は、フィールドを持たないケイパビリティです。許可の中身（grant）はなく、持っていることだけが意味を持ちます。`==` では比較できません。
+- `Console` はフィールドを持たないケイパビリティです。権限の内容（grant）はなく、この値を持つこと自体が権限を表します。`==` での比較はできません。
 - `ConsoleError` は、読み書きに失敗したときのエラーです。`reason` に理由の文字列が入ります。
 - `Stream` は、プログラムが問い合わせられる 2 つの出力ストリームの名前です。`Output`（標準出力）と `Error`（標準エラー出力）です。
 
@@ -127,7 +127,7 @@ pub fn write_line(
 ) -> Result<Unit, ConsoleError> uses io
 ```
 
-`text` を標準出力に 1 行として書きます。プログラムの結果は、これで書きます。テストでは、書いた行が `Outcome` の `output` に、書いた順に入ります。
+`text` を標準出力に 1 行として書き出します。プログラムの処理結果の出力に使います。テストでは、書き出した行が `Outcome` の `output` に出力順で格納されます。
 
 ### console.write_bytes
 
@@ -157,7 +157,7 @@ pub fn write_error_line(
 pub fn is_terminal(access: Console, stream: Stream) -> Bool uses io
 ```
 
-そのストリームが端末、つまり人が見ているものなら `true`、パイプやファイルなら `false` を返します。端末を持たない対象（ページや、ホストのないモジュール）では `false` です。色や進捗の表示を出すかどうかの判断に使います。シミュレート世界の標準ストリームはパイプです。`sim.with_sim` の `setup` に `sim.terminal(width: ...)` があると、両方のストリームが端末になります（[sim](sim.md)）。
+ストリームが端末に接続されていれば `true`、パイプやファイルなら `false` を返します。ページやホストのないモジュールなど、端末を持たないターゲットでは `false` になります。色や進捗を表示するかどうかの判断に使えます。シミュレート世界では、標準ストリームは既定でパイプです。`sim.with_sim` の `setup` に `sim.terminal(width: ...)` を指定すると、両方が端末になります（[sim](sim.md)）。
 
 ### console.width
 
@@ -165,7 +165,7 @@ pub fn is_terminal(access: Console, stream: Stream) -> Bool uses io
 pub fn width(access: Console, stream: Stream) -> Option<Int> uses io
 ```
 
-そのストリームが、システムが大きさを教えてくれる端末なら、その幅を桁数で `Some(value: 桁数)` として返します。そうでなければ `None` です。シミュレート世界では、`sim.terminal` に渡した幅です。
+ストリームが端末に接続され、システムからサイズを取得できる場合に、幅を桁数で `Some(value: 桁数)` として返します。それ以外は `None` です。シミュレート世界では、`sim.terminal` に指定した幅を返します。
 
 ### console.describe
 
@@ -195,7 +195,7 @@ pub fn greet() -> Result<Unit, console.ConsoleError> uses io {
 
 ## 例
 
-次のモジュールは、標準入力の各行を整数として足し、結果を標準出力に書くプログラム（`report_total` と `main`）と、`Console` の各関数を使う小さな関数です。数として読めない行は、0 として扱います。
+次のモジュールには、標準入力の各行を整数として足し合わせ、合計を標準出力に書き出すプログラム（`report_total` と `main`）と、`Console` の各関数を試す小さな関数が含まれています。数値として読めない行は 0 として扱います。
 
 テストでは、`Console` は `console.simulated()` で作り、`main` には `manifest` と同じ形のレコード `Caps(console: console.simulated())` を渡します。入力の行は `test.World` の `input` で与えます。
 
@@ -385,7 +385,7 @@ example warn_goes_to_the_error_stream for warn {
 }
 ```
 
-`main` の終了ステータスは、`report_total` が成功すれば 0、`ConsoleError` で失敗すれば標準エラー出力にその説明を書いて 1 です。
+`report_total` が成功すると、`main` は終了ステータス 0 を返します。`ConsoleError` で失敗した場合は、説明を標準エラー出力に書き出し、終了ステータス 1 を返します。
 
 ### 端末についての問い合わせ
 

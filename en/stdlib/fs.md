@@ -1,6 +1,6 @@
 # std.fs
 
-A module that reads and writes files and folders through capabilities. Write `import std.fs;` and call the functions as in `fs.read_text(access: ..., path: ...)`. Every function touches only paths under the **root** (a folder) of the capability received as `access:`.
+This module reads and writes files and folders through capabilities. Import it with `import std.fs;` and call functions such as `fs.read_text(access: ..., path: ...)`. Each operation is limited to paths under the **root** folder of the capability passed as `access:`.
 
 There are two capabilities. `Fs` can read and write under its root, and `ReadOnlyFs` can only read. Both are requested by writing the root in the program’s `manifest` declaration, and are received as the second argument of `main`. They cannot be created anywhere else (error `E1301`). A function that uses files takes a capability as an argument and also declares `uses io` ([17 Resources and capabilities](../language/17-resources-and-capabilities.md)).
 
@@ -146,7 +146,7 @@ pub fn keep(
 }
 ```
 
-If you only need to read or write a whole file, the whole-file functions such as `read_text` and `write_text` write the `using` for you internally.
+For whole-file operations, use functions such as `read_text` and `write_text`, which handle `using` internally.
 
 ## Function list
 
@@ -403,7 +403,7 @@ pub fn metadata(
 ) -> Result<Entry, FsError> uses io
 ```
 
-Returns what the path is, without following a link. `name` is the last part of the path, `kind` is `File`, `Folder`, or `Link`, and `size` is the number of bytes of a file (0 for a folder and a link). `modified_ms` is the time of the last write, in milliseconds since 1970-01-01 UTC. The simulated world keeps no times and gives 0.
+Returns metadata for the path without following links. `name` is the final path component, `kind` is `File`, `Folder`, or `Link`, and `size` is the file size in bytes (0 for folders and links). `modified_ms` is the last modification time in milliseconds since 1970-01-01 UTC. The simulated world does not track timestamps and returns 0.
 
 A path that is not there is not an error: the result is `Ok` with `kind: EntryKind.Missing`. A path outside the root is `Err(error: FsError.Denied(path: ...))`.
 
@@ -1160,7 +1160,7 @@ example split_lines_splits_at_line_feeds for split_lines {
 
 ### Appending, replacing, renaming, and looking at a path
 
-Examples that add to a log, replace a state file, move a file to an archive folder, and ask what a path is.
+Examples of appending to a log, replacing a state file, moving a file to an archive folder, and inspecting path metadata.
 
 ```cernith
 module guide.fs_edits;

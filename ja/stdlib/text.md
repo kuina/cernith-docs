@@ -1,6 +1,6 @@
 # std.text
 
-`String` を扱う関数のモジュールです。`import std.text;` と書き、`text.split(of: ..., separator: ...)` のように呼びます。分割の結果を表すレコード型 `SplitPair` も、このモジュールにあります（`text.SplitPair`）。
+`String` の操作を提供するモジュールです。`import std.text;` で読み込み、`text.split(of: ..., separator: ...)` のように呼び出します。分割結果を表すレコード型 `text.SplitPair` も定義されています。
 
 `String` は Unicode スカラー値の列です（[03 型](../language/03-types.md)）。このモジュールの位置、長さ、個数は、すべてスカラー値で数えます。バイト数でも UTF-16 の単位数でも、人が 1 文字と感じる単位（書記素）でもありません。たとえば `"a😀b"` の長さは 3 で、`text.index_of(of: "a😀b", part: "b")` は `Some(value: 2)` です。結合文字を使った `"e\u{301}"`（`e` と U+0301）は、見た目が 1 文字でも長さ 2 です。
 
@@ -46,7 +46,7 @@ pub record SplitPair {
 }
 ```
 
-`text.split_once` の結果で、区切りの前の部分（`before`）と後の部分（`after`）を持ちます。タプルがないので、2 つの値をまとめるためのレコードです（[03 型](../language/03-types.md)）。
+`text.split_once` の結果を表す型で、区切りの前（`before`）と後（`after`）を保持します。Cernith にはタプルがないため、2 つの値をレコードにまとめています（[03 型](../language/03-types.md)）。
 
 以降の例の `→` の右は、呼び出しの値です。`→ 欠陥` は、その呼び出しが事前条件に違反して欠陥になることを表します。これらは、末尾の「例」の `example` で確かめてあります。
 
@@ -106,7 +106,7 @@ pub fn from_code_point(value: Int) -> String
 
 事後条件：結果の長さは 1 です。
 
-なぜ `Option` を返さないのか：スカラー値でない値は `String` にできないので、呼び出す側が範囲を保証するものとして、事前条件にしています。
+スカラー値でない値は `String` に含められないため、この関数では呼び出し側に範囲の保証を求めます。そのため、`Option` を返す代わりに事前条件を設けています。
 
 - `text.from_code_point(value: 97)` → `"a"`
 - `text.from_code_point(value: 128512)` → `"😀"`
@@ -149,11 +149,11 @@ pub fn index_of(of: String, part: String) -> Option<Int>
 
 `part` が最初に現れる位置を `Some(value: 位置)` で返します。現れなければ `None` です。位置はスカラー値で数えます。
 
-端の場合：`part` が空の文字列なら、`of` が空でも `Some(value: 0)` です。`part` が `of` より長ければ `None` です。
+境界条件：`part` が空の文字列なら、`of` が空でも `Some(value: 0)` です。`part` が `of` より長ければ `None` です。
 
 事後条件：`Some(value: position)` のとき、`position >= 0`、`position + part.length <= of.length`、`text.slice(of: of, from: position, to: position + part.length) == part` です。
 
-なぜ `Option` を返すのか：見つからないことは、通常の結果の 1 つだからです。`-1` のような番兵の値を返す代わりに、型で表します。
+見つからない場合も通常の結果として扱い、`-1` などの番兵値ではなく `Option` で表します。
 
 - `text.index_of(of: "banana", part: "an")` → `Some(value: 1)`
 - `text.index_of(of: "banana", part: "x")` → `None`
@@ -172,7 +172,7 @@ pub fn ends_with(of: String, suffix: String) -> Bool
 
 それぞれ、`part` を含む、`prefix` で始まる、`suffix` で終わる、のときに `true` です。`contains` は `text.index_of` が `Some` を返すことと同じです。`starts_with` は `index_of` が `Some(value: 0)` を返すことと同じです。
 
-端の場合：`part`、`prefix`、`suffix` が空の文字列なら、`of` が何であっても（空でも）`true` です。引数が `of` より長ければ `false` です。
+境界条件：`part`、`prefix`、`suffix` が空の文字列なら、`of` が何であっても（空でも）`true` です。引数が `of` より長ければ `false` です。
 
 - `text.contains(of: "banana", part: "nan")` → `true`
 - `text.contains(of: "banana", part: "nab")` → `false`
@@ -193,7 +193,7 @@ pub fn ends_with(of: String, suffix: String) -> Bool
 pub fn count(of: String, part: String) -> Int
 ```
 
-`part` が `of` に現れる回数を返します。左から順に探し、見つかった部分の次から探し直すので、重なった出現は数えません。
+`of` に `part` が現れる回数を返します。左から検索し、一致した部分の直後から再開するため、重なり合う一致は数えません。
 
 事前条件：`not text.is_empty(of: part)`。空の `part` を渡すと欠陥です（空の文字列は、どの位置にも現れるため、回数が決まりません）。
 
@@ -215,13 +215,13 @@ pub fn count(of: String, part: String) -> Int
 pub fn split(of: String, separator: String) -> List<String>
 ```
 
-`separator` で区切った部分のリストを返します。左から順に探し、見つかった部分の次から探し直すので、重なった出現では区切りません。区切りの前後が空なら、その部分は空の文字列として結果に残ります。
+`separator` で分割した文字列のリストを返します。左から検索し、一致した部分の直後から再開するため、重なり合う一致は区切りとして使いません。区切りの前後が空の場合も、空文字列として結果に残ります。
 
 事前条件：`not text.is_empty(of: separator)`。空の `separator` を渡すと欠陥です。1 文字ずつに分けたいときは `text.chars` を使います。
 
 事後条件：結果の長さは 1 以上で、`text.join(parts: result, separator: separator)` は `of` に戻ります。
 
-端の場合：`of` が空の文字列なら、結果は空の文字列 1 つのリスト（`[""]`）です。空のリストにはなりません。区切りが連続すれば、その間に空の文字列が入ります。区切りが先頭や末尾にあれば、先頭や末尾に空の文字列が入ります。
+境界条件：`of` が空の文字列なら、結果は空の文字列 1 つのリスト（`[""]`）です。空のリストにはなりません。区切りが連続すれば、その間に空の文字列が入ります。区切りが先頭や末尾にあれば、先頭や末尾に空の文字列が入ります。
 
 - `text.split(of: "a,b,,c", separator: ",")` → `["a", "b", "", "c"]`
 - `text.split(of: "abc", separator: ",")` → `["abc"]`
@@ -243,7 +243,7 @@ pub fn split_once(of: String, separator: String) -> Option<SplitPair>
 
 事前条件：`not text.is_empty(of: separator)`。空の `separator` を渡すと欠陥です。
 
-端の場合：`before` と `after` は、空の文字列になりえます。`of` が空の文字列なら `None` です。
+境界条件：`before` と `after` は、空の文字列になりえます。`of` が空の文字列なら `None` です。
 
 `key=value` のように、最初の区切りで 2 つに分けたいときに使います。値の中に `=` が含まれていても、`after` にそのまま残ります。
 
@@ -263,7 +263,7 @@ pub fn join(parts: List<String>, separator: String) -> String
 
 `parts` の要素を、間に `separator` を挟んで連結します。`separator` は要素の間にだけ入り、先頭と末尾には付きません。`text.split` の逆です。事前条件はありません。
 
-端の場合：`parts` が空のリストなら `""`、要素が 1 つなら、その要素です。`separator` は空の文字列でもかまいません。
+境界条件：`parts` が空のリストなら `""`、要素が 1 つなら、その要素です。`separator` は空の文字列でもかまいません。
 
 - `text.join(parts: ["a", "b", "c"], separator: ", ")` → `"a, b, c"`
 - `text.join(parts: [], separator: ",")` → `""`
@@ -277,7 +277,7 @@ pub fn join(parts: List<String>, separator: String) -> String
 pub fn lines(of: String) -> List<String>
 ```
 
-文字列を行に分けます。次の手順の結果です。
+文字列を、次の 3 段階で行に分割します。
 
 1. `"\n"` で `text.split` する。
 2. 最後の部分が空の文字列なら、その 1 つを取り除く。
@@ -308,7 +308,7 @@ pub fn lines(of: String) -> List<String>
 pub fn replace(of: String, target: String, replacement: String) -> String
 ```
 
-`of` の中の `target` を、すべて `replacement` に置き換えます。`text.split` と同じ規則で、左から順に、重ならない出現だけを置き換えます。置き換えた結果の中は、探し直しません。`target` が現れなければ `of` のままです。
+`of` 内の `target` をすべて `replacement` に置き換えます。`text.split` と同様に、左から順に重ならない一致だけを対象とします。置換後の文字列を再び検索することはありません。`target` がなければ `of` をそのまま返します。
 
 事前条件：`not text.is_empty(of: target)`。空の `target` を渡すと欠陥です。
 
@@ -372,7 +372,7 @@ pub fn trim_start(of: String) -> String
 pub fn trim_end(of: String) -> String
 ```
 
-空白を、`trim` は両端から、`trim_start` は先頭から、`trim_end` は末尾から、取り除きます。文字列の途中の空白は残ります。空白だけの文字列は `""` になります。
+`trim` は両端、`trim_start` は先頭、`trim_end` は末尾の空白を取り除きます。文字列の途中の空白は残ります。空白だけの文字列は `""` になります。
 
 取り除く空白は、次の 4 つの文字だけです。`text.is_space` が `true` を返す文字と同じです。
 
@@ -383,7 +383,7 @@ pub fn trim_end(of: String) -> String
 | 改行 `\n` | U+000A |
 | 復帰 `\r` | U+000D |
 
-垂直タブ（U+000B）、改ページ（U+000C）、改行なしスペース（U+00A0）、全角スペース（U+3000）など、ほかの Unicode の空白は、取り除かれません。
+垂直タブ（U+000B）、改ページ（U+000C）、ノーブレークスペース（U+00A0）、全角スペース（U+3000）など、そのほかの Unicode の空白は取り除きません。
 
 - `text.trim(of: "  a b \t\n")` → `"a b"`
 - `text.trim(of: "abc")` → `"abc"`

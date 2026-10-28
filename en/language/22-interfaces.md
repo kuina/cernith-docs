@@ -2,7 +2,7 @@
 
 An **interface** is a bound that a program declares itself. It lists functions that a type promises to have, and it can state laws that every promise must keep. A type makes the promise with an explicit `impl`. A generic function asks for the promise with a bound, as in `<T: Priced>`.
 
-Nothing is searched for and nothing is guessed. The `impl` that a call uses is chosen by the type of the argument, and an `impl` that does not exist is an error at the call (`E0316`).
+The argument type determines which `impl` a call uses. If no suitable `impl` exists, the checker reports an error at the call site (`E0316`).
 
 ## A first example
 
@@ -76,7 +76,7 @@ example label_names_the_item_and_its_price for label {
 
 `Priced` is the interface. `Book` and `Pen` each promise it with an `impl`. `bill` and `label` are generic functions that work for every type that has made the promise. `cernith test` runs the example, and it also runs the law `never_negative` on generated `Book` and `Pen` values.
 
-The rest of this chapter takes the parts one at a time.
+The rest of this chapter explains each part in turn.
 
 ## Declaring an interface
 
@@ -291,7 +291,7 @@ report.cnth   module report;   pub record Tile { ... }
 
 `impl shapes.Area for report.Tile` may be written in `shapes` or in `report`. In a third module that imports both, it is `E1402`.
 
-`List<Int>` and `List<String>` are the same type constructor, so they cannot have different `impl`s of one interface. A program that wants two behaviors writes two functions, or a wrapper type.
+`List<Int>` and `List<String>` share the same type constructor, so they cannot have separate `impl`s of the same interface. To provide two behaviors, write separate functions or use a wrapper type.
 
 ```cernith-error E1402
 module guide.priced;
@@ -375,7 +375,7 @@ failed   property guide.refunds.law_Priced_never_negative_for_Refund  counterexa
 
 ## Eq and Ord
 
-`Eq` and `Ord` stay as they are: `==` and `<` need no `impl`, and a user `impl Eq` or `impl Ord` is `E1402`.
+`Eq` and `Ord` remain built-in bounds: `==` and `<` require no `impl`. A user-defined `impl Eq` or `impl Ord` produces `E1402`.
 
 ```cernith-error E1402
 module guide.order;

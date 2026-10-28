@@ -1,8 +1,8 @@
 # std.test
 
-効果（`io`、`clock`、`random`）を持つコードを `example` や `property` から試すためのモジュールです。`import std.test;` と書き、`test.with_world(world, run)` のように呼びます。`with_world` は、関数 `run` を**シミュレート世界**の中で実行し、結果とその間に書き出された行を返します。
+効果（`io`、`clock`、`random`）を持つコードを、`example` や `property` でテストするためのモジュールです。`import std.test;` で読み込み、`test.with_world(world, run)` のように呼び出します。`with_world` は、関数 `run` を**シミュレート世界**で実行し、その結果と実行中に出力した行を返します。
 
-`example` と `property` は純粋なコードしか呼べません（効果を持つ関数を直接呼ぶと、エラー `E0403` です）。入出力や時計や乱数を使う関数は、`with_world` の中で呼ぶことで、決まった入力と決まった結果のテストにできます。テスト全般の書き方は [16 テスト](../language/16-testing.md) にあります。
+`example` や `property` から効果のある関数を直接呼ぶと、エラー `E0403` になります。入出力・時刻・乱数を使う関数も、`with_world` の中で呼べば、入力を固定して再現可能なテストにできます。テストの基本的な書き方は、[16 テスト](../language/16-testing.md) を参照してください。
 
 ## 型と関数
 
@@ -34,7 +34,7 @@ pub fn with_world<T>(
 
 ## シミュレート世界
 
-世界の中では、`std.io`、`std.clock`、`std.random` の関数が、実際の入出力や時計や乱数の代わりに、次のように振る舞います。
+シミュレート世界では、`std.io`、`std.clock`、`std.random` は実際の外部環境を使わず、次のように動作します。
 
 | 呼び出し | 世界の中での振る舞い |
 | --- | --- |
@@ -47,7 +47,7 @@ pub fn with_world<T>(
 
 ### 乱数と seed の対応
 
-`random.int_between(low, high)` は、`world.seed` を種とする SplitMix64 で作られます。種と、1 回ごとの値は、次のように決まります。計算はすべて $2^{64}$ を法とします。
+`random.int_between(low, high)` は、`world.seed` をシードとする SplitMix64 を使います。内部状態と各呼び出しの値は、次の手順で決まります。計算はすべて $2^{64}$ を法とします。
 
 1. 世界を作るとき、状態を `seed mod 2^64` にします（負の `seed` も使えます。`-1` は $2^{64}-1$ と同じです）。
 2. 呼び出しごとに、次を行います。
@@ -72,7 +72,7 @@ pub fn with_world<T>(
 
 ### run に書ける効果
 
-`run` の型は `fn() -> T uses clock, io, random` です。`run` が持てる効果は、この 3 つのうちの一部（または効果なし）です。`io` だけ、`random` だけ、といった関数を渡せます。3 つ以外の効果を持つ関数を渡すと、エラー `E0404` です。
+`run` の型は `fn() -> T uses clock, io, random` です。この 3 つの効果の一部だけを使う関数や、純粋な関数も渡せます。たとえば `io` のみ、`random` のみでも構いません。それ以外の効果を持つ関数を渡すと、エラー `E0404` になります。
 
 `with_world` が扱う効果は、この 3 つだけです。ファイル、環境変数、HTTP を含む世界は、[sim](sim.md) で作ります。
 

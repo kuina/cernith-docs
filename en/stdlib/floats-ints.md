@@ -1,6 +1,6 @@
 # std.floats and std.ints
 
-Two modules that handle numeric arrays: `Floats` (a sequence of `Float64`) and `Ints` (a sequence of `Int`). To use them, write `import std.floats;` or `import std.ints;` and call functions as in `floats.get(array, at)` and `ints.range(from, to)`. The type names `Floats` and `Ints` are in the prelude, so no `import` is needed just to write the types ([02 Lexical structure](../language/02-lexical-structure.md)).
+These modules work with numeric arrays: `Floats` stores `Float64` values and `Ints` stores `Int` values. Import `std.floats` or `std.ints`, then call functions such as `floats.get(array, at)` and `ints.range(from, to)`. The type names `Floats` and `Ints` are in the prelude and need no import ([02 Lexical structure](../language/02-lexical-structure.md)).
 
 The two modules have almost the same functions. Below, the shared functions are described together, and the functions that exist in only one module are shown separately.
 
@@ -26,7 +26,7 @@ Both `Floats` and `Ints` can be converted to a `List` (`to_list`). To create one
 
 ### Updating returns a new array
 
-`floats.set(array, at, value)` returns a **new array** in which only the element at `at` is replaced. The original array does not change. It is not a function that rewrites an array in place, as in other languages.
+`floats.set(array, at, value)` returns a **new array** with the element at `at` replaced. The original array remains unchanged.
 
 ```text
 a = floats.set(array: a, at: i, value: x);
@@ -107,7 +107,7 @@ The functions that are not in the following table (`length`, `to_list`, `concat`
 
 The upper limit on the number of elements, 1,073,741,823, is $2^{30}-1$.
 
-Why does `get` use a precondition instead of returning an `Option`? Because it is treated the same way as the `List` index `xs[i]`. For `xs[i]` as well, an index outside the range is a defect (the checker reports places where an index may fall outside the range with error `E0506`). When it is not known whether an index is within the range, compare it with `floats.length(array: a)` first.
+`get` uses a precondition to match the behavior of `List` indexing, `xs[i]`: an out-of-range index is a defect, and the checker reports potentially invalid accesses as `E0506`. If you do not know whether an index is valid, compare it with `floats.length(array: a)` before accessing the array.
 
 ## Function details
 

@@ -1,6 +1,6 @@
 # Testing
 
-Tests are part of the language. They are written in the same module as the function under test, right after that function, and `cernith test` runs them. There are two kinds of test: `example` and `property`.
+Cernith has built-in support for two kinds of tests: `example` and `property`. Write tests immediately after the function they test, in the same module, and run them with `cernith test`.
 
 ```cernith
 module guide.testing;
@@ -98,7 +98,7 @@ The property above results in `gave-up` (the output of `cernith test` is shown l
 
 ### Input generation
 
-Inputs are determined by the type. The user does not write generators.
+The test runner generates inputs from their types. You do not need to write generators.
 
 | Type | Values |
 | --- | --- |
@@ -149,7 +149,7 @@ This `double_doubles` asserts `double(value) == value * 2` for a function in whi
 
 ## Regression tests from counterexamples
 
-A failing property outputs a **regression test** as an example in source form.
+When a property fails, the test runner generates a **regression test** as an `example` in Cernith source code.
 
 ```text
 example regression_double_doubles_722e5041 for double {
@@ -175,7 +175,7 @@ example regression_something_1234abcd for identity {
 
 ## Testing code with effects
 
-An `example` and a `property` are pure ([11 Effects](11-effects.md)). Code that uses input and output, the clock, or randomness is run and tried inside a **simulated world** with `with_world` from the standard library `std.test`.
+An `example` or `property` must be pure ([11 Effects](11-effects.md)). To test code that uses input/output, the clock, or randomness, run it in a **simulated world** using `with_world` from `std.test`.
 
 ```text
 test.with_world(
@@ -236,7 +236,7 @@ pub fn unused(value: Int) -> Int {
 }
 ```
 
-`--coverage` adds a summary and the places that no test reached: functions that were not called, the branches of `if`, the arms of `match`, and the contract clauses that were not evaluated. Saved as `coverage.cnth`:
+`--coverage` reports a summary and locations no test reached: uncalled functions, untaken `if` branches and `match` arms, and unevaluated contract clauses. Saving the module as `coverage.cnth` produces the following output:
 
 ```text
 $ cernith test --coverage coverage.cnth

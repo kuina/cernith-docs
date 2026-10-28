@@ -29,7 +29,7 @@ await async.scope(
 - A `Task` cannot be copied, stored, passed, or captured; it can only be awaited (`E1202`). `Task`, `Scope`, and channel endpoints cannot be made the value of a scope (`E1202`). `Scope` and channel endpoints can be used by the tasks of their own scope.
 - A task can start other tasks in the same scope, and it can open its own scopes. A scope ends when all of its tasks have ended.
 - Failure: the value of a task is the value that its function returns. A failure that can occur is a `Result` inside `T`, and the side that awaits handles it. A defect inside a task ends the program (exit status 70).
-- Tasks run in turns. A task runs until the next suspension point (a waiting `await`, `pause`, `sleep`, or a waiting channel operation). A program must not depend on the order of tasks.
+- Tasks run cooperatively: each runs until its next suspension point (a blocking `await`, `pause`, `sleep`, or a blocking channel operation). Programs must not depend on task execution order.
 
 ## The async effect and await
 
@@ -89,7 +89,7 @@ pub fn squares(a: Int, b: Int) -> Pair uses async {
 }
 ```
 
-`async.block_on(run: ...)` is an ordinary function that runs a program containing tasks and returns its value (it does not declare `async`, so it can be called from an `example` or from `main`).
+`async.block_on(run: ...)` runs a program containing tasks and returns its result. It does not declare `async`, so you can call it from an `example` or from `main`.
 
 ```cernith-error E1201
 module guide.tasks;
@@ -321,7 +321,7 @@ A waiting loop follows the same termination rules as any other loop ([13 Termina
 
 The scheduler is Cernith code in `std.async` (`block_on`, `block_on_with`), and the same code runs in every execution environment. `Policy.Fifo` runs tasks in the order in which they became runnable. `Policy.Seeded(seed: n)` chooses the next task from the runnable ones using a random number determined by `n`. The same seed gives the same order everywhere.
 
-If a property takes the seed as input, then when an order-dependent mistake is found, the failing seed is reported as the counterexample and can be reproduced with `block_on_with(policy: Policy.Seeded(seed: s), ...)`.
+By taking a scheduling seed as a property input, you can test for order-dependent bugs. A failing seed is reported as the counterexample and can be replayed with `block_on_with(policy: Policy.Seeded(seed: s), ...)`.
 
 ```cernith
 module guide.schedules;

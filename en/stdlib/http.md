@@ -1,6 +1,6 @@
 # std.http
 
-A module that fetches content from other hosts over HTTP. Write `import std.http;` and call functions as in `http.get(access: ..., url: ...)`. `get` and `get_bytes` send GET requests and return the body; `send` sends a request with any method, headers, and a body, and returns the status and headers too. A call waits until the response returns.
+This module sends HTTP requests to other hosts. Import it with `import std.http;` and call functions such as `http.get(access: ..., url: ...)`. `get` and `get_bytes` send GET requests and return the body. `send` accepts a method, headers, and body, and also returns the response status and headers. Each call waits for the response.
 
 Using HTTP requires the capability `Http`. A program asks for `Http` in its `manifest` declaration, together with **a list of host names that may be connected to**. It is passed as the second argument of `main`. It cannot be created anywhere else (error `E1301`). A function that receives an `Http` also declares `uses io` ([17 Resources and capabilities](../language/17-resources-and-capabilities.md)).
 
@@ -123,7 +123,7 @@ Sends a GET request to `url` and returns the body.
 3. For any other status code, the result is `Err(error: HttpError.Status(code: ...))`. The body is not returned.
 4. If no response is obtained, for example because the connection cannot be made, the result is `Err(error: HttpError.Network(detail: ...))`; if the execution environment does not support requests, it is `Err(error: HttpError.Unsupported)`.
 
-The reason a status code outside the success range is turned into an error is to prevent the body from being mistaken for a success and used. The body of a 404 page is not processed as the data that was expected.
+Non-success status codes become errors so that a response such as a 404 page is not mistaken for the expected data.
 
 ### http.get_bytes
 
@@ -155,7 +155,7 @@ Sends `request` and returns the response, **whatever its status is**: a 404 or a
    - a header value that contains a line break (this prevents header injection).
 3. Otherwise the request is sent. If no response is obtained, the result is `Err(error: HttpError.Network(detail: ...))`; `detail` is `"timeout"` when the time limit passed and `"certificate"` when the check of the certificate failed (the check cannot be switched off). A body of more than 64 MiB in the answer is also a `Network` failure. Where the target cannot make the request, the result is `Err(error: HttpError.Unsupported)`.
 
-**A redirect is never followed.** A 3xx answer is the response, with its `Location` header, and the program asks again, so that the new address is checked against the permitted hosts like any other.
+**Redirects are not followed automatically.** A 3xx response is returned with its `Location` header. The program must issue a new request, which checks the destination against the permitted hosts again.
 
 ### http.new_request
 
@@ -481,7 +481,7 @@ example reachable_follows_the_grant for reachable {
 
 ### Sending a request
 
-The following module sends a POST request with headers and a body, reads a header of the answer, and checks the refusals of `send`. In the simulated world, `sim.route_for` gives the answer and `sim.requests_made` shows what was sent.
+The following module sends a POST request with headers and a body, reads a response header, and tests requests that `send` rejects. In the simulated world, `sim.route_for` supplies responses and `sim.requests_made` records the requests sent.
 
 ```cernith
 module guide.http_send;

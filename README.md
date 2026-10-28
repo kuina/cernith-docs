@@ -1,8 +1,8 @@
 # Cernith
 
-Cernith is a programming language created by Kuina-chan that statically checks types, effects, and contracts. Source files use the extension `.cnth`. This repository documents the language specification (version 2.0) and the core modules of the standard library `std`.
+Cernith is a programming language by Kuina-chan with static checks for types, effects, and contracts. Source files use the `.cnth` extension. This repository covers the Cernith 2.0 language specification and the core modules of its standard library, `std`.
 
-Cernith（セルニス）は、くいなちゃんによって作られた、型・効果・契約を静的に検査するプログラミング言語です。このリポジトリは、言語仕様（2.0）と標準ライブラリ `std` のコアモジュールを説明します。
+Cernith（セルニス）は、くいなちゃんが開発したプログラミング言語です。型・効果・契約を静的に検査します。このリポジトリでは、Cernith 2.0 の言語仕様と、標準ライブラリ `std` のコアモジュールを解説しています。
 
 | Language / 言語 | Directory / ディレクトリ |
 | --- | --- |

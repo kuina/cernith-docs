@@ -14,7 +14,7 @@ Functions can be defined only at the top level (there is no syntax for defining 
 ```
 
 - With `pub`, the function can be called from other modules. Without it, the function is available only within its module ([14 Modules and packages](14-modules-and-packages.md)).
-- A parameter has the form `name: type`, and a trailing comma may or may not be added.
+- Each parameter is written as `name: type`. A trailing comma is optional.
 - The return type is required. A function that returns no value returns `Unit`.
 - `uses` declares the effects that the function has. If there are no effects, it is not written ([11 Effects](11-effects.md)).
 - At the start of the body, the clauses `requires`, `ensures`, and `decreases` can be written, in this order ([09 Contracts](09-contracts.md), [13 Termination](13-termination.md)). After the clauses comes one blank line, followed by the statements and the final expression that gives the value.
@@ -36,7 +36,7 @@ example area_of_3_by_4 for rectangle_area {
 
 ## Parameters and labels
 
-The name of a parameter becomes the label of a call as it is. The caller must pass all arguments with labels, in the same order as in the declaration (`E0304`, `E0310`; see [04 Expressions](04-expressions.md)). Therefore, **the names and order of the parameters are part of the published specification of the function**. Changing a name breaks every call.
+A parameter's name is also its argument label. Callers must supply all arguments with labels, in declaration order (`E0304`, `E0310`; see [04 Expressions](04-expressions.md)). Thus, **parameter names and order are part of the function's public interface**. Renaming a parameter breaks existing calls.
 
 The value of a parameter cannot be changed. Assigning to a parameter is `E0321`.
 
@@ -50,7 +50,7 @@ fn(label: type, ...) -> return type uses effects { body }
 
 The parameter types and the return type of a function expression cannot be omitted. The body has the same form as that of a function, and both `return` and clauses can be written.
 
-A function type is written `fn(label: type, ...) -> return type uses effects`. **The labels of a function type are part of the type.** When a function value is called, the labels of the type on the side that sees the value are used. It does not matter if the function that was passed has different parameter names.
+A function type is written `fn(label: type, ...) -> return type uses effects`. **Argument labels are part of the function type.** When calling a function value, use the labels in the type visible to the caller. The original function may use different parameter names.
 
 ```cernith
 module guide.function_values;
@@ -97,7 +97,7 @@ pub fn call(apply: fn(item: Int) -> Int) -> Int {
 }
 ```
 
-Compatibility between function types is contravariant in the parameters, covariant in the return value, and, for effects, “a function with fewer effects can be placed where more effects are allowed.” Parameter names are not compared.
+Function types are contravariant in their parameters and covariant in their return values. A function with fewer effects can be used where more effects are allowed. Parameter names are not compared when checking compatibility.
 
 A function expression cannot use a `var` of the enclosing function (`E0322`). Values bound with `let` and the values of parameters can be captured.
 
@@ -235,7 +235,7 @@ example use_nothing_is_zero for use_nothing {
 [pub] const name: type = expression;
 ```
 
-A constant is an immutable value written at the top level of a module, and its type must always be written. The initializer is pure (it cannot call functions that have effects; `E0401`), and it is evaluated exactly once before the program starts, in dependency order. A cycle in which a constant depends on itself is `E0211`.
+A constant is an immutable value declared at module level with an explicit type. Its initializer must be pure: calling an effectful function produces `E0401`. Initializers are evaluated once before the program starts, in dependency order. A dependency cycle produces `E0211`.
 
 ```cernith
 module guide.constants;

@@ -1,6 +1,6 @@
 # Contracts
 
-A **contract** states, in the same language as the code, a condition that a function, a loop, or a type must satisfy. If a contract is broken, the program stops with a defect ([12 Errors and defects](12-errors-and-defects.md)). The checker attempts to prove that the contract is always kept ([10 Proof obligations and assurance levels](10-verification.md)).
+A **contract** expresses a condition that a function, loop, or type must satisfy, using the same language as the code. Violating a contract stops the program with a defect ([12 Errors and defects](12-errors-and-defects.md)). The checker attempts to prove that contracts always hold ([10 Proof obligations and assurance levels](10-verification.md)).
 
 ## Kinds of clauses
 
@@ -92,7 +92,7 @@ The conditions of a contract are **specification expressions**. They are ordinar
 
 A specification expression must be **pure**. A function with effects cannot be called (`E0402`). A lambda cannot be written either.
 
-Expressions are written in three kinds of places, and the elements available differ.
+The available expression forms depend on the context:
 
 | Context | Place | What can be used |
 | --- | --- | --- |
@@ -111,7 +111,7 @@ exists i in a..=b: p       // there exists an i with a <= i <= b for which p hol
 forall v: Int: p           // p for every integer v (proof-only)
 ```
 
-A quantifier that ranges over an integer range or the elements of a list is **executable**. Both a range and a list are finite, so every case can actually be examined. A quantifier that ranges over a whole type (`forall v: Int: ...`) is **proof-only**. It is not evaluated at run time, and if it cannot be proved it is reported as “unverified.” It is never silently treated as having succeeded.
+A quantifier over an integer range or the elements of a list is **executable**: the range or list is finite, so every case can be checked. A quantifier over an entire type (`forall v: Int: ...`) is **proof-only**. It is not evaluated at run time. If it cannot be proved, it is reported as “unverified,” never silently treated as successful.
 
 The body of a quantifier extends as far to the right as possible. When placing a quantifier inside an operator expression, enclose it in parentheses.
 
@@ -212,7 +212,7 @@ example pass_through_keeps_the_value for pass_through {
 }
 ```
 
-The postcondition of `first_or_none` states a property of the function, that `None` is returned only when the input is empty, which goes beyond what the type can express.
+The postcondition of `first_or_none` states something its type alone cannot express: the function returns `None` only when the input is empty.
 
 ## Contracts at run time
 

@@ -55,7 +55,7 @@ example check_accepts_and_rejects for parse_percent {
 | `Percent(value: n)` | Creates a `Percent` from `n`. If the condition is not satisfied, the result is a defect |
 | `Percent.check(value: n)` | `Some(value: ...)` if the condition is satisfied, `None` otherwise. It never causes a defect |
 
-Which one to use depends on whether the input can be trusted. Use `Percent(value: n)` for a value that is known to satisfy the condition, and use `Percent.check(value: n)` for a value that comes from outside as input, handling the `None` case.
+Choose based on whether the input is trusted. Use `Percent(value: n)` when you know the condition holds. For external input, use `Percent.check(value: n)` and handle `None`.
 
 An integer or floating-point literal does not become a value of a refined type on its own. `var p: Percent = 50` and `fn f() -> Percent { 50 }` are errors (`E0301`); write `Percent(value: 50)` instead. The diagnostic suggests this rewrite.
 
@@ -174,7 +174,7 @@ pub fn next_id(id: UserId) -> UserId {
 }
 ```
 
-Both exist to prevent values that have the same representation but different meanings, such as a user ID and an order ID that are both `Int`, from being mixed up.
+Distinct types prevent values with the same representation but different meanings from being mixed up, such as user IDs and order IDs that are both represented as `Int`.
 
 From other modules, a `distinct` type is **abstract**. The name of the type can be used, but neither `UserId(value: ...)` nor `.value` can be used outside the module that defines it (`E0215`). The defining module publishes the functions that create and read values ([14 Modules and packages](14-modules-and-packages.md)). A refined type, in contrast, can be constructed by anyone (the condition acts as the guard).
 
@@ -206,9 +206,9 @@ type Stack<T> = distinct List<T>;
 type NonEmpty<T> = List<T> where self.length > 0;
 ```
 
-- The base type at the arguments of a use is the base with the parameters replaced. `Stack<Int>.value` is a `List<Int>`, and `NonEmpty<Int>` is a refined type over `List<Int>`.
+- Type arguments are substituted into the base type. `Stack<Int>.value` is a `List<Int>`, and `NonEmpty<Int>` refines `List<Int>`.
 - A parameter that the base does not mention is a **tag**. `Id<Enemy>` and `Id<Bullet>` are different types (`E0303`), although both hold an `Int`. A tag costs nothing at run time.
-- The arguments of a constructor come from the expected type: `Id(value: 7)` is an `Id<Enemy>` where an `Id<Enemy>` is expected. Where nothing gives them, write them with `::<>`: `Id::<Enemy>(value: 1)`. Otherwise the error is `E0320`.
+- Constructor type arguments are inferred from the expected type: `Id(value: 7)` produces an `Id<Enemy>` where that type is expected. If the context does not determine the arguments, specify them with `::<>`, as in `Id::<Enemy>(value: 1)`. Otherwise, the checker reports `E0320`.
 - A refinement may mention the parameters. A bound that the declaration needs is written on the parameter (`Keyed<K: Ord>`), and an argument that does not satisfy it is `E0316`.
 - A refined list is indexed like its base (`items[0]`), and `NonEmpty.check(value: ...)` works as for any refined type. As before, `NonEmpty<Int>` is a subtype of `List<Int>`.
 
@@ -329,7 +329,7 @@ pub fn size(keys: Keyed<Box>) -> Int {
 
 Subtyping in Cernith is made of a single rule: **a refined type is a subtype of its base type** (`Percent` is a subtype of `Int`; transitively, so is a refined type whose base is another refined type).
 
-This relation lifts as follows.
+This relation extends to compound and function types as follows.
 
 - Covariantly through an immutable constructor: `List<Percent>` is a subtype of `List<Int>`. The same holds for `Option`, `Result`, records, and variants with type parameters.
 - Through function types: parameters are contravariant, return values are covariant, and a function with fewer effects is the subtype. Parameter names are not compared.

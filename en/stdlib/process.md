@@ -1,10 +1,10 @@
 # std.process
 
-A module that runs another program and reads what it printed, through the capability `Process`. Write `import std.process;` and call `process.run(access: ..., program: ..., arguments: ..., options: ...)`.
+This module runs external programs and captures their output through the `Process` capability. Import it with `import std.process;` and call `process.run(access: ..., program: ..., arguments: ..., options: ...)`.
 
 Running a program is the largest authority a program can ask for: the other program is not checked by Cernith. For this reason, **the grant in the `manifest` is the boundary**. It lists the programs that may be started (by a name, with their absolute paths and the arguments each may receive), the folders they may work in, the environment variables they may see, and the limits on time and output. A call can only narrow what the grant allows. `cernith audit` prints the grant ([17 Resources and capabilities](../language/17-resources-and-capabilities.md)).
 
-`run` waits for the program to end. It starts one program at a time, and no program outlives the call.
+`run` starts one program and waits for it to finish. The started program cannot continue running after the call returns.
 
 ## Types
 
@@ -104,7 +104,7 @@ The call names the program by `name`; it never gives a path. The grant is writte
 
 ## Rules that protect the machine
 
-`run` checks the call against the grant **before** it asks the host, and the host checks again what it can, for example the form of the path by the rules of its system.
+`run` checks the call against the grant **before** asking the host to execute it. The host repeats the checks it can perform, such as validating the path against its platform's rules.
 
 - **No shell and no search of `PATH`.** The program that runs is the one at the `path` of the grant. The arguments are passed as they are, one by one, so they are not read a second time by any shell.
 - **A fresh environment.** The child sees only the variables named in `environment`. A call may give a value to a granted name in `Options.environment`; a name without a value takes the host's own value if there is one. A call cannot name a variable that the grant does not list.
@@ -476,7 +476,7 @@ $ cernith audit process_tools.cnth
 
 ### Refusals and limits
 
-The next module checks the argument rules and the refusals that `run` makes before it starts anything, and what a time out and an output limit look like.
+The next module tests argument rules, requests rejected before a program starts, timeouts, and output limits.
 
 ```cernith
 module guide.process_limits;

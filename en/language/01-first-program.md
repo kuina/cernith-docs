@@ -1,6 +1,6 @@
 # First program
 
-A Cernith source file contains one module and has the extension `.cnth`. A file consists, in order, of a `module` line, `import` lines, and definitions (types, constants, functions, and tests).
+Each Cernith source file contains one module and uses the extension `.cnth`. It starts with a `module` declaration, followed by `import` declarations and then definitions (types, constants, functions, and tests).
 
 ## The smallest runnable program
 
@@ -18,9 +18,9 @@ pub fn main(args: List<String>) -> Int uses io {
 ```
 
 - `module guide.hello;` declares that this file is the module `guide.hello`.
-- `import std.io;` declares that the standard library module `std.io` is used. From then on, names from it are called with the prefix `io.`, as in `io.write_line(...)` ([14 Modules and packages](14-modules-and-packages.md)).
+- `import std.io;` imports the standard library module `std.io`. Its names are then available with the prefix `io.`, as in `io.write_line(...)` ([14 Modules and packages](14-modules-and-packages.md)).
 - `pub fn main(args: List<String>) -> Int uses io { ... }` is the entry point of the program. It receives the command-line arguments as a `List<String>` and returns an `Int`. This `Int` is the exit status of the program. `uses io` declares that the function performs input and output ([11 Effects](11-effects.md)).
-- `io.write_line(text: "hello")` writes one line to standard output. **An argument always carries a label (`text:`).**
+- `io.write_line(text: "hello")` writes a line to standard output. **Every argument must have a label (`text:`).**
 - `io.write_line` returns success or failure as a `Result`. Each case of a `match` has the form `pattern => expression,`, and the last line also ends with a comma. The `_` in `Ok(value: _)` means “the value is not used.”
 
 ## A program with a contract and tests
@@ -57,18 +57,18 @@ property result_in_range for clamp(value: Int, low: Int, high: Int) {
 }
 ```
 
-The body of a function is structured in the following order.
+A function body has the following structure:
 
 1. **Clauses** (`requires`, `ensures`, `decreases`). Each ends with `;`. `requires` is a condition that the caller must satisfy, and `ensures` is a condition that the function guarantees; `result` refers to the return value ([09 Contracts](09-contracts.md)).
 2. One blank line.
 3. Statements (`let`, `var`, assignment, `for`, and so on).
-4. The final expression. **The final expression, which has no trailing `;`, is the value of the function.** `return` can also be used, but it cannot be the last statement of the body ([05 Statements and bindings](05-statements.md)).
+4. The final expression. **The final expression has no trailing `;` and supplies the function's return value.** You can also use `return` for an early return, but it cannot be the last statement in the body ([05 Statements and bindings](05-statements.md)).
 
-An `example` and a `property` follow the function. `example name for function { Bool expression }` states a fact about concrete inputs, and `property name for function(arguments) { ... }` states a law that holds for all inputs. The implementation generates inputs for a property automatically and tries them; if it finds an input for which the property does not hold, it reports a minimal counterexample ([16 Testing](16-testing.md)).
+An `example` or `property` follows the function it tests. `example name for function { Bool expression }` checks a concrete input, while `property name for function(arguments) { ... }` states a law intended to hold for all inputs. The test runner automatically generates inputs for each property. If it finds one that violates the law, it reports a minimal counterexample ([16 Testing](16-testing.md)).
 
 ## Using the implementation
 
-The command of the implementation is `cernith`. Only the minimum needed in this documentation is shown here.
+Use the `cernith` command to work with Cernith programs. The following commands cover the basics used in this documentation.
 
 | Command | What it does and its exit code |
 | --- | --- |
@@ -86,7 +86,7 @@ By default, diagnostics are output as JSON. With `--format compact`, each diagno
 t.cnth:4:3 E0307 unqualified-integer-division: Integer division must name its rounding rule (int.div_floor, int.div_trunc, int.div_euclid). [fix (needs-review): ...]
 ```
 
-The format is `file:line:column code name: message`, and the meanings of the codes are collected in [20 Diagnostic codes](20-diagnostics.md).
+The format is `file:line:column code name: message`. See [20 Diagnostic codes](20-diagnostics.md) for the meaning of each code.
 
 The output of `cernith test` has the following form.
 
@@ -97,7 +97,7 @@ passed   property guide.first.result_in_range
 3 tests: 3 passed
 ```
 
-`cernith eval` shows what a call gives without writing an `example`. It uses the module of the first program above, saved as `first.cnth`.
+Use `cernith eval` to try a call without writing an `example`. This example uses the first program above, saved as `first.cnth`.
 
 ```text
 $ cernith eval first.cnth 'clamp(value: 12, low: 0, high: 9)'
@@ -112,7 +112,7 @@ $ cernith eval first.cnth 'clamp(value: 12, low: 0, high: 9)'
 
 The expression must be pure. All the names of the module, including private ones, can be used. With `--session`, `eval` reads one line at a time from standard input (an expression, `let name = expression`, or `import module`) and prints one JSON line for each.
 
-Other commands, one line each:
+The following commands provide additional tools:
 
 | Command | What it does |
 | --- | --- |

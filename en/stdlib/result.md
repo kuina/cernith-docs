@@ -1,8 +1,8 @@
 # std.result
 
-This module provides functions on `Result<T, Fail>`. `Result<T, Fail>` is a type that represents either success (`Ok(value: x)`) or failure (`Err(error: e)`), and it is in the prelude. To use the functions of this module, write `import std.result;` and call them as in `result.map(...)`. The functions on `Option<T>` are in [option](option.md), and this page is its counterpart.
+This module provides operations on the prelude type `Result<T, Fail>`, which represents success (`Ok(value: x)`) or failure (`Err(error: e)`). Import it with `import std.result;` and call functions such as `result.map(...)`. For similar operations on `Option<T>`, see [option](option.md).
 
-The basic way to take a `Result` apart is `match` ([07 Records and variants](../language/07-records-and-variants.md)). There is also `?`, which returns an `Err` as it is to the caller ([12 Errors and defects](../language/12-errors-and-defects.md)). The functions of this module are for writing common `match` patterns more briefly.
+Use `match` to handle a `Result` directly ([07 Records and variants](../language/07-records-and-variants.md)), or `?` to return an `Err` to the caller ([12 Errors and defects](../language/12-errors-and-defects.md)). This module offers shorter forms for common matching patterns.
 
 The label of every argument that receives a `Result` is `outcome` (in the `option` module, it is `option`).
 

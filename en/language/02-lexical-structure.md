@@ -1,6 +1,6 @@
 # Lexical structure
 
-Source files are written in UTF-8 without a BOM. The lexer cuts out tokens from left to right, taking the longest match. Whitespace only separates tokens and carries no meaning. However, a tab character outside a string literal and a carriage return (CRLF line ends) are lexical errors (`E0001`): indent with spaces and end lines with LF. The syntax does not depend on formatting (line breaks and indentation), so any formatting yields the same syntax tree as far as the grammar is concerned. The rules for formatting are defined separately ([19 Canonical form](19-canonical-form.md)).
+Source files use UTF-8 without a BOM. The lexer reads tokens from left to right, choosing the longest match. Whitespace separates tokens but otherwise has no meaning. Tabs outside string literals and carriage returns (including CRLF line endings) are lexical errors (`E0001`): use spaces for indentation and LF for line endings. Within these rules, line breaks and indentation do not affect the syntax tree. Formatting rules are defined separately ([19 Canonical form](19-canonical-form.md)).
 
 All lexical errors are reported with the code `E0001` (syntax-error).
 
@@ -44,7 +44,7 @@ The name `_` (a single underscore) stands for an unused value in patterns and lo
 | Unit (`Unit`) | `()` | |
 
 - Integers are written in decimal only. Digit separators, leading `0`s, and suffixes cannot be used. A negative number is written with the unary `-` (`-7`). `Int` has no upper limit on the number of digits.
-- A floating-point number requires `.` and at least one digit of the fractional part. `1e5`, `1.`, and `.5` are not literals. The exponent is `e` or `E` followed by an optional sign and a string of digits. A literal whose value is outside the range of `Float64` (for example `1.0e400`) is `E0001`.
+- A floating-point literal must include `.` and at least one fractional digit. `1e5`, `1.`, and `.5` are not valid literals. An exponent consists of `e` or `E`, an optional sign, and one or more digits. A literal outside the range of `Float64` (such as `1.0e400`) produces `E0001`.
 - Within a string, the escapes `\\`, `\"`, `\n`, `\t`, `\r`, and `\u{hex digits}` can be used. Any other use of `\` is an error. A line break cannot be written directly inside a string literal (a line break is `\n`). Any other Unicode scalar value can be written as it is.
 
 ```cernith
@@ -121,7 +121,7 @@ pub fn f() -> String {
 
 ## Comments
 
-A comment runs from `//` to the end of the line. There are no block comments. A comment has no meaning and does not affect the behavior of the program.
+A comment starts with `//` and continues to the end of the line. There are no block comments. Comments do not affect program behavior.
 
 A comment can be written immediately before a definition, an `import`, a statement, a clause, a field, a case of a variant, or a case of a `match`; at the end of a block; and at the end of the file. It cannot be written in the middle of an expression or in the middle of a parameter list. A comment written at the end of a line of code is moved, in canonical form, to the line immediately before the element that follows ([19 Canonical form](19-canonical-form.md)).
 
@@ -182,7 +182,7 @@ The following names are always available without an `import`. They are not keywo
 | Variant cases | `Ok`, `Err`, `Some`, `None` |
 | Built-in function | `hole` |
 
-`hole(reason: "explanation")` is an expression that marks an unfinished place. It can be written in a position of any type. The checker notifies it with the warning `W0701` (hole-present), and if execution reaches it, it becomes a defect ([12 Errors and defects](12-errors-and-defects.md)).
+`hole(reason: "explanation")` marks unfinished code. This expression can appear wherever a value of any type is expected. The checker reports warning `W0701` (hole-present), and execution raises a defect if it reaches the hole ([12 Errors and defects](12-errors-and-defects.md)).
 
 The prelude contains only the types that literals, `?`, `match`, and operators refer to directly. Other types, such as `Map` and `Set`, are used from modules of the standard library, with the module name attached (`map.Map<String, Int>`).
 

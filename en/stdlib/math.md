@@ -1,6 +1,6 @@
 # std.math
 
-The module of mathematical functions and constants for `Float64`. Write `import std.math;` and call a function as in `math.sin(x: 1.0)`. Constants are written without parentheses, as in `math.pi`.
+This module provides mathematical functions and constants for `Float64`. Import it with `import std.math;` and call functions such as `math.sin(x: 1.0)`. Refer to constants without parentheses, as in `math.pi`.
 
 `Float64` has no infinity and no NaN, so input outside the domain is forbidden by a precondition, and a call that violates it is a defect. An operation whose result goes beyond the range of `Float64` is also a defect ([03 Types](../language/03-types.md)). In examples that use `Float64`, the proof obligation for this overflow tends to appear as `E0508` (float-overflow) or `W0504` (proof unknown), so narrow the range of the input with `requires`.
 
@@ -58,7 +58,7 @@ The domains are all preconditions. A call that passes input outside the domain i
 | `to_int` | `x == math.trunc(x: x) and x >= -9007199254740992.0 and x <= 9007199254740992.0` |
 | `atan`, `atan2`, `hypot`, `floor`, `ceil`, `trunc`, `round` | None |
 
-The range of `sin`, `cos`, and `tan` has an upper limit because, for larger `x`, the number of digits of π that this module holds is not enough for the computation that brings the angle into the range of π/2. The upper limit of `exp` comes from the fact that e to the 710th power exceeds the maximum `Float64` value.
+`sin`, `cos`, and `tan` limit the magnitude of `x` because their angle-reduction calculation needs more digits of π for larger inputs than the module stores. The upper bound for `exp` reflects the fact that e raised to 710 exceeds the maximum `Float64` value.
 
 Even inside the domain, it is a defect if the result goes beyond the range of `Float64` (for example, when `hypot` is given two very large values). It is also a defect if an intermediate value of the computation goes beyond the range even though the result would fit: `atan2(y: 1.0e300, x: 1.0e-10)` is a defect because `y / x` is computed first, and for the same reason `acos` is a defect for an `x` whose magnitude is below about `5.6e-309`. Conversely, when the result of `exp` is smaller than the smallest `Float64` (as in `exp(x: -800.0)`), the result is `0.0`, not a defect.
 
@@ -184,7 +184,7 @@ The result of each is an integer-valued `Float64`, and there is no precondition.
 pub fn to_int(x: Float64) -> Int
 ```
 
-Converts an integer-valued `Float64` to an `Int`. It is not a function that rounds the fractional part. The precondition is as follows, and a call that does not satisfy it is a defect.
+Converts an integer-valued `Float64` to an `Int` without rounding. Calls that violate the following precondition cause a defect.
 
 ```text
 requires x == trunc(x: x)

@@ -7,9 +7,9 @@ A small calculator for lines of text, written as a package of eight modules. It 
 - `:vars` lists the variables, sorted by name;
 - an empty line is ignored.
 
-A mistake never ends the session. It prints the message, the line you typed, and a caret under the column, and the next line is read as usual.
+An input error does not end the session. The calculator prints a message, the input line, and a caret at the error column, then continues with the next line.
 
-It is the larger sample of this collection: the other samples show one idea each, this one shows how the ideas fit together in a program of about 2000 lines. Everything that computes is a pure function with examples and properties; only `main` has `uses io`.
+This sample combines the individual ideas introduced elsewhere in the collection into a program of about 2000 lines. All computation lives in pure functions with examples and properties; only `main` declares `uses io`.
 
 ## Run it
 
@@ -122,7 +122,7 @@ The messages: `unexpected character`, `unexpected end of input`, ``missing `)` `
 
 ## Module map
 
-Each module imports only the ones named in its row, so the dependencies form a plain layering: `token` and `ast` at the bottom, `main` at the top.
+Each module imports only the modules listed in its row. Dependencies form layers, from `token` and `ast` at the bottom to `main` at the top.
 
 | Module | Lines | Imports (minicalc) | What it does |
 |---|---|---|---|
@@ -137,8 +137,8 @@ Each module imports only the ones named in its row, so the dependencies form a p
 
 ## What to read first
 
-1. `main.cnth` (a minute): how small the effectful shell is, and the end-to-end examples that use `test.with_world`.
-2. `session.cnth`: how one line goes through lex, parse and evaluate, and how an error from any stage becomes the same report. Look at the properties at the end of the file: they type numbers into the calculator as text and compare with the integers.
+1. `main.cnth`: the small entry point that handles input and output, and end-to-end examples using `test.with_world`.
+2. `session.cnth`: the path from an input line through lexing, parsing, and evaluation, with errors from each stage reported consistently. The properties at the end exercise the calculator with numbers as text and compare the results with integer calculations.
 3. `parser.cnth`, the header comment first: how a recursive parser proves that it terminates.
 4. `ast.cnth` and `eval.cnth` for the structural recursion over the tree (no `decreases` needed).
 5. `arith.cnth` for contracts that the verifier proves.

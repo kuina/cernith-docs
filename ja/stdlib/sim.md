@@ -1,10 +1,10 @@
 # std.sim
 
-ファイル・環境変数・ネットワークの応答を持つ**シミュレート世界**を作り、その中で関数を実行するモジュールです。`import std.sim;` と書き、`sim.with_sim(...)` や `sim.file(...)` のように呼びます。世界の外のファイルやネットワークには、一切触れません。
+ファイル・環境変数・ネットワークの応答を持つ**シミュレート世界**で、関数を実行するモジュールです。`import std.sim;` で読み込み、`sim.with_sim(...)` や `sim.file(...)` のように呼び出します。操作はシミュレート世界の中で完結し、外部のファイルやネットワークにはアクセスしません。
 
-[fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md)、[process](process.md) の関数は、ケイパビリティを通して世界に問い合わせます。テストでは、`fs.simulated()` などのテスト用ケイパビリティを使い、問い合わせの相手をシミュレート世界にします。`std.test.with_world`（[test](test.md)）の世界が持つのは、標準入力の行・時計・乱数だけです。ファイル・環境変数・ネットワークも持つ世界が必要なテストでは、`sim.with_sim` を使います。
+[fs](fs.md)、[env](env.md)、[http](http.md)、[console](console.md)、[process](process.md) の関数は、ケイパビリティを通じて外部環境を操作します。テストでは、`fs.simulated()` などのテスト用ケイパビリティで、その操作先をシミュレート世界に切り替えます。`std.test.with_world`（[test](test.md)）が用意するのは、標準入力の行・時計・乱数だけです。ファイル・環境変数・ネットワークも必要な場合は、`sim.with_sim` を使います。
 
-流れは 3 段階です。
+テストは、次の 3 段階で行います。
 
 1. `sim.file`、`sim.env_var`、`sim.route` などで、世界の初期状態（`setup`）を書く。
 2. `sim.with_sim` で、テスト対象の関数を世界の中で実行する。
@@ -22,7 +22,7 @@ pub record SimOutcome<T> {
 
 - `value` は、実行した関数の戻り値です。
 - `output` は、実行中に `console.write_line` や `io.write_line` が書いた行です。書いた順に並びます。
-- `snapshot` は、実行が終わったときの世界の状態を表す文字列のリストです。中身の形式に頼らず、後述の `file_content` などの関数で調べます。
+- `snapshot` は、実行終了時の世界の状態を表す文字列のリストです。内部形式には依存せず、後述の `file_content` などの関数で内容を調べてください。
 
 実行中に `http.send` で送られたリクエストは、`sim.requests_made` が次のレコードのリストとして返します。`headers` は、送られたとおりのヘッダーの行（`Name: value`）です。
 
@@ -89,7 +89,7 @@ pub fn file(path: String, content: String) -> String
 pub fn file_bytes(path: String, content: Bytes) -> String
 ```
 
-`path` にファイルを置きます。`path` は、`/` で区切った相対パスで書きます（`reports/2024/a.txt`）。途中のフォルダは自動的にできます。`fs` の関数は、パスを整えて（`path.normalize`）から世界に問い合わせるので、`a/../b.txt` のように整える前の形や、`/` で始まる絶対パスで置いたファイルには、届きません。
+`path` にファイルを配置します。`path` は `reports/2024/a.txt` のように、`/` 区切りの相対パスで指定します。途中のフォルダは自動作成されます。`fs` は `path.normalize` で正規化してからパスにアクセスするため、`a/../b.txt` のような未正規化のパスや、`/` で始まる絶対パスで配置したファイルにはアクセスできません。
 
 `file` と `file_bytes` の違いは、内容を文字列とバイト列のどちらで渡すかだけです。テキストのファイルを `fs.read_file_bytes` で読むと、その UTF-8 のバイト列が得られ、UTF-8 でないバイト列のファイルを `fs.read_text` で読むと `Failed(detail: "malformed-text")` になります。
 
@@ -163,7 +163,7 @@ pub fn program_timed_out(
 ) -> String
 ```
 
-シミュレート世界は、プログラムを実行しません。`process.run`（[process](process.md)）には、これらのスクリプトで答えます。
+シミュレート世界では実際のプログラムを起動せず、`process.run`（[process](process.md)）に対して、以下のスクリプトで応答します。
 
 - `path` は、呼び出しが使う名前ではなく、**グラントが与える**プログラムのパス（`ProgramGrant` の `path`）です。`process.simulated()` のグラントには、`/sim/tool` にプログラム `tool` があります。
 - `program` は、引数がちょうど `arguments` である呼び出しに答えます。プログラムは `Exit.Exited(code: exit_code)` で終わり、`stdout` と `stderr` を出力します。`program_any` は、どんな引数の呼び出しにも答えます。引数が完全に一致するスクリプトのほうが優先されます。
@@ -221,7 +221,7 @@ pub fn file_paths<T>(outcome: SimOutcome<T>) -> List<String>
 pub fn open_handles<T>(outcome: SimOutcome<T>) -> Int
 ```
 
-実行が終わった時点で、閉じられていない開いたファイルの数を返します。`using` で開いたファイルは必ず閉じられるので、通常は 0 です。
+実行終了時に開いたままのファイル数を返します。`using` で開いたファイルは自動で閉じられるため、通常は 0 です。
 
 ### sim.stdout_chunks と sim.stderr_lines
 
@@ -249,7 +249,7 @@ pub fn processes_started<T>(outcome: SimOutcome<T>) -> List<List<String>>
 
 次のモジュールは、環境変数 `REPORT_URL` の URL からレポートを取得して `out` フォルダに保存し、画像を取得して保存と標準出力への書き出しを行うプログラムです。このページで説明している `sim` のすべての関数を使って、環境変数、ネットワーク、ファイル、標準出力・標準エラー出力の関わる動作をテストしています。
 
-`simulate` は、`with_sim` に `Caps`（`manifest` と同じ形のレコード）を渡す形に包んだ補助関数です。
+`simulate` は、`Caps`（`manifest` と同じ形のレコード）を受け取って使えるよう、`with_sim` を包んだ補助関数です。
 
 ```cernith
 module guide.sim_demo;
@@ -521,7 +521,7 @@ example stored_picture_size_reads_a_file_set_up_as_bytes for stored_picture_size
 
 ### スクリプト、端末、記録されたリクエスト
 
-次のモジュールは、スクリプトでコマンドに答え、世界を端末にし、`send` が送ったものを読み戻します。
+次のモジュールでは、コマンドの応答をスクリプトで設定し、端末をシミュレートし、`send` で送信したリクエストを確認します。
 
 ```cernith
 module guide.sim_scripts;

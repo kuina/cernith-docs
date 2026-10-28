@@ -1,6 +1,6 @@
 # 型
 
-Cernith の型は静的に決まり、名前的です。名前の違う 2 つの型は、同じ構造を持っていても別の型です。この章では組み込みの型を説明します。ユーザーが定義する型は、[07 レコードとバリアント](07-records-and-variants.md) と [08 制約付き型と distinct 型](08-refined-and-distinct-types.md) にあります。
+Cernith は静的型付けの言語で、型を名前で区別します。名前が異なれば、構造が同じでも別の型として扱われます。この章では組み込み型を説明します。ユーザー定義型については、[07 レコードとバリアント](07-records-and-variants.md) と [08 制約付き型と distinct 型](08-refined-and-distinct-types.md) を参照してください。
 
 ## 組み込み型
 
@@ -19,13 +19,13 @@ Cernith の型は静的に決まり、名前的です。名前の違う 2 つの
 | `Floats` | 有限の `Float64` の列 | `std.floats` の関数で作る |
 | `Ints` | 64 ビット整数の列 | `std.ints` の関数で作る |
 
-`Bytes`、`Floats`、`Ints` は、`List` よりコンパクトに格納される列です。値であり、`==` は要素を比較します。大小は比べられません。リテラルはなく、作成と読み出しは標準ライブラリの関数で行います（[bytes](../stdlib/bytes.md)、[floats と ints](../stdlib/floats-ints.md)）。
+`Bytes`、`Floats`、`Ints` は、`List` よりもコンパクトに格納される列です。いずれも値として扱われ、`==` では要素どうしが比較されます。大小比較はできません。専用のリテラルはなく、作成や読み出しには標準ライブラリの関数を使います（[bytes](../stdlib/bytes.md)、[floats と ints](../stdlib/floats-ints.md)）。
 
 ### Int
 
 `Int` は桁あふれしません。足し算・引き算・掛け算の結果は、常に正確な整数です。
 
-割り算は、丸め方を名前で選びます。`Int` どうしに `/` を使うとエラー `E0307` です。`std.int` の `div_floor`、`div_trunc`、`div_euclid`（と、対応する剰余 `rem_floor`、`rem_trunc`、`rem_euclid`）のどれを使うかを書きます（[stdlib/int.md](../stdlib/int.md)）。`/` は `Float64` どうしにだけ使えます。
+整数の割り算では、丸め方を明示的に選びます。`Int` どうしに `/` を使うとエラー `E0307` になります。代わりに `std.int` の `div_floor`、`div_trunc`、`div_euclid` を使います。対応する剰余の関数は `rem_floor`、`rem_trunc`、`rem_euclid` です（[stdlib/int.md](../stdlib/int.md)）。`/` は `Float64` どうしにのみ使えます。
 
 ```cernith-error E0307
 module guide.division;
@@ -35,7 +35,7 @@ pub fn half(value: Int) -> Int {
 }
 ```
 
-丸め方が複数あるのに 1 つを既定にしないのは、負の数を割ったときに結果が変わるからです。たとえば `-7` を `2` で割ると、負の無限大の方向への丸め（床関数）では `-4`、0 方向への丸め（切り捨て）では `-3` です。
+既定の丸め方がないのは、負の数を含む割り算では丸め方によって結果が変わるためです。たとえば `-7` を `2` で割ると、負の無限大に向けて丸める場合（floor）は `-4`、0 に向けて切り捨てる場合は `-3` になります。
 
 ### Float64
 
@@ -99,7 +99,7 @@ example to_float_converts for to_float {
 
 `List<T>` は変更できません。要素を加えたり置き換えたりした新しい列を作るには、`++`、または標準ライブラリの関数（[stdlib/list.md](../stdlib/list.md)）を使います。`xs.length` は要素数（0 以上の `Int`）、`xs[i]` は `i` 番目の要素です。範囲外の添字は欠陥です。
 
-`xs.length` と `s.length` は、組み込み型が持つ唯一のフィールドの形をしたアクセサです。ほかの操作は、すべてモジュールの関数です。`xs.is_empty` や `s.split(...)` のような記法はありません。
+組み込み型でフィールドの記法を使えるのは、`xs.length` と `s.length` だけです。そのほかの操作にはモジュールの関数を使います。`xs.is_empty` や `s.split(...)` といった記法はありません。
 
 ```cernith-error E0506
 module guide.builtins;
@@ -139,7 +139,7 @@ example length_counts_scalar_values for length_of {
 
 ### Option と Result
 
-`Option<T>` は「値が無いかもしれない」ことを、`Result<T, E>` は「失敗するかもしれない」ことを、型で表します。`null` はありません。値が無い可能性は、型に `Option` として現れ、使う側は `match` で両方の場合を扱います（[12 エラーと欠陥](12-errors-and-defects.md)）。
+`Option<T>` は値がない可能性を、`Result<T, E>` は処理が失敗する可能性を表します。`null` はありません。値がない可能性は `Option` で型に明示し、`match` で両方の場合を扱います（[12 エラーと欠陥](12-errors-and-defects.md)）。
 
 ### 関数型
 
@@ -190,7 +190,7 @@ pub fn pair() -> Int {
 | `==`、`!=`（境界 `Eq`） | `Int`、`Float64`、`String`、`Bool`、`Unit`、および要素がこれらを満たす `List`、`Option`、`Result`、レコード、バリアント |
 | `<` など（境界 `Ord`） | `Int`、`Float64`、`String`、`Bool` |
 
-関数型には、どちらもありません。`List`、`Option`、`Result`、レコード、バリアントに大小の比較はありません。使うとエラー `E0316` です。`Eq` と `Ord` は固定で、プログラムが自分の型に実装することはできません。境界は、ジェネリック関数でも使います（[06 関数](06-functions.md)）。また、プログラムは、インターフェースと呼ばれる独自の境界を宣言できます（[22 インターフェース](22-interfaces.md)）。
+関数型は、等価比較にも大小比較にも対応していません。`List`、`Option`、`Result`、レコード、バリアントも大小比較には対応せず、使うとエラー `E0316` になります。`Eq` と `Ord` は組み込みの境界であり、ユーザーが実装することはできません。境界はジェネリック関数でも使います（[06 関数](06-functions.md)）。独自の境界は、インターフェースとして宣言できます（[22 インターフェース](22-interfaces.md)）。
 
 ```cernith-error E0316
 module guide.ordering;

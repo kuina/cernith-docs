@@ -1,8 +1,8 @@
 # std.show
 
-This module provides the interface `Show`, which turns a value into text, and two functions on text. To use it, write `import std.show;` and call the method as `show.text(value: x)`.
+This module provides `Show`, an interface for converting values to text, plus two text helpers. Import it with `import std.show;` and call `show.text(value: x)`.
 
-The text of a value is the Cernith that builds the value: `Point(x: 1, y: 2)`, `Some(value: "a")`, `[1, 2]`. A reader can paste it into an `example`. `Show` is an interface ([22 Interfaces](../language/22-interfaces.md)), so a function can ask for it with a bound, as in `fn describe<T: show.Show>(value: T) -> String`.
+A value is displayed as the Cernith code that constructs it, such as `Point(x: 1, y: 2)`, `Some(value: "a")`, or `[1, 2]`. You can paste this text into an `example`. Because `Show` is an interface ([22 Interfaces](../language/22-interfaces.md)), functions can require it as a bound: `fn describe<T: show.Show>(value: T) -> String`.
 
 ## Interface
 
@@ -16,7 +16,7 @@ pub interface Show {
 }
 ```
 
-The law says that a value has one text. `cernith test` runs it for every `impl` of `Show` in the module being tested that has no type parameters.
+The law requires each value to have a consistent text representation. `cernith test` checks it for every non-generic `Show` impl in the module under test.
 
 ## Types that have a Show impl
 

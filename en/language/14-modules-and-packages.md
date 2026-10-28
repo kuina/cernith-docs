@@ -15,7 +15,7 @@ import geometry.shapes as shapes; // used as shapes.Rect, shapes.area(...)
 
 - An `import` gives the full name of the module. The **alias** is the last part, or the name after `as`. Names from other modules are always written with the alias as a prefix (`list.take(...)`, `shapes.Rect`, `shapes.Length(value: 2)`).
 - There is no wildcard `import`, no `import` that brings names in without an alias, and no re-export.
-- An `import` takes one line each, and in canonical form the lines are sorted by path.
+- Write each `import` on its own line. Canonical form sorts them by path.
 - Using the same alias twice is `E0207`. An alias cannot be the name of a parameter or a local variable (`E0202`).
 - An unused `import` is `E0209`. A module used only inside a type (`i: shapes.Length`) counts as used.
 - An `import` of a module that does not exist is `E0206`.
@@ -52,7 +52,7 @@ Using something that is not `pub` from another module is `E0208` (not-exported).
 
 ### Abstract types
 
-A `distinct` type is the language’s “sealed type.” Only the module that defines it creates and reads its values. Other modules can touch the values only through the functions that module makes public. To hide a record, make public a `distinct` type over a private record.
+A `distinct` type encapsulates its representation within the defining module. Only that module can construct values and read their contents directly; other modules use its public functions. To hide a record's representation, expose a `distinct` type whose base is a private record.
 
 ```text
 type AccountData = record ...;           // private
@@ -104,7 +104,7 @@ geometry = { path = "../geometry" }
 - `targets` is the list of backends that the package supports (`python`, `javascript`, `wasm`, `native`). If it is omitted, the package supports all of them. Wasm builds for hosts and for the browser all count as `wasm`. `cernith build` refuses a backend that is not in the list (`E0229`), and `cernith difftest` runs only the declared backends. A package can support only the backends that all of its dependencies support (`E0228`).
 - `minimum-level` and `[budget]` are also checked as keys, but they are not yet enforced.
 
-The directory of a package can be passed to a command as it is (`cernith check app/`, `cernith test app/`, `cernith run app/`).
+Commands accept package directories directly (`cernith check app/`, `cernith test app/`, `cernith run app/`).
 
 ### Dependencies
 

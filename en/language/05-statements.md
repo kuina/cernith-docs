@@ -1,6 +1,6 @@
 # Statements and bindings
 
-The body of a function or loop is a block. A block consists of zero or more statements and an optional final expression. The final expression (an expression without a trailing `;`) is the value of the block. If there is no final expression, the value of the block is the unit `()` (of type `Unit`).
+A function or loop body is a block containing zero or more statements and an optional final expression. The final expression has no trailing `;` and supplies the block's value. Without a final expression, the block evaluates to `()` (of type `Unit`).
 
 ## Kinds of statements
 
@@ -19,7 +19,7 @@ A statement ends with `;`. `if`, `match`, `for`, and `while` are exceptions: a s
 
 ## let and var
 
-`let` creates an immutable binding. The type is determined from the right-hand side, so a type annotation cannot be written (writing one is `E0323`). `var` creates a mutable local variable and requires a type annotation (omitting it is `E0311`). To modify it, write `name = expression;`. Assigning to a `let` or to an argument is `E0321`.
+`let` creates an immutable binding. Its type is inferred from the right-hand side; adding a type annotation produces `E0323`. `var` creates a mutable local variable and requires a type annotation; omitting it produces `E0311`. Use `name = expression;` to change its value. Assigning to a `let` binding or a parameter produces `E0321`.
 
 ```cernith
 module guide.bindings;
@@ -83,7 +83,7 @@ pub fn f() -> Int {
 
 ## Rules for names
 
-The following three rules keep the names inside a function from being ambiguous.
+Three rules keep names unambiguous within a function:
 
 **Within one function, a name that is already in scope cannot be bound again.** If a name introduced by `let`, `var`, a parameter, or a pattern is the same as a name that is already bound, the error is `E0203` (shadowing). An outer name cannot be hidden (shadowed). This ensures that the same name never refers to different things in the middle of a function. Names whose scopes do not overlap, such as the variables of two consecutive `for` loops or the names in the two branches of an `if`, may be the same.
 
@@ -121,7 +121,7 @@ pub fn f(int: Int) -> Int {
 
 ## Expression statements and discard
 
-An expression statement calls a function in the form `f(...);`. A value whose result is not `Unit` cannot be silently thrown away; that is `E0306` (unused-result). If the result is not used, add `discard`.
+An expression statement calls a function as `f(...);`. If the result is not `Unit`, discarding it implicitly produces `E0306` (unused-result). Add `discard` when you intend to ignore the result.
 
 ```cernith
 module guide.discards;
@@ -197,7 +197,7 @@ for i in a..=b { ... }      // from a to b inclusive
 
 For an element that is not used, make the name `_`.
 
-A `std.seq.Seq` can be traversed too ([std.seq](../stdlib/seq.md)). A `Seq` is lazy and has a `bound`, an upper bound on its length. The loop takes one step of the sequence per turn and takes at most `bound` turns, so it ends without a justification, and an early `return` stops the rest from being computed.
+You can also iterate over a `std.seq.Seq` ([std.seq](../stdlib/seq.md)). A `Seq` is lazy and carries an upper bound on its length, `bound`. Each iteration advances the sequence by one step, up to `bound` iterations in total. This guarantees termination without an explicit measure, and an early `return` leaves the remaining elements unevaluated.
 
 ```text
 for name in seq { ... }     // at most seq.bound turns

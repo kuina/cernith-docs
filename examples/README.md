@@ -1,12 +1,12 @@
 # Cernith samples
 
-Small, verified programs that show how to write Cernith. They are meant to be read next to the [language reference](../en/README.md); each one names the chapter it belongs to. The comments are in English only.
+Small, verified programs illustrating how to write Cernith. Read them alongside the [language reference](../en/README.md); each sample links to its relevant chapter. Comments are in English.
 
-Every sample passes `cernith fmt --check`, `cernith check --release`, `cernith check --verify` (no diagnostics), `cernith test`, and, if it has `main`, `cernith run`. The files in `mistakes/` are the opposite: each one is rejected with the code on its first line.
+Every sample passes `cernith fmt --check`, `cernith check --release`, `cernith check --verify` (no diagnostics), `cernith test`, and, if it has `main`, `cernith run`. Files in `mistakes/` are intentionally invalid: each is rejected with the diagnostic code on its first line.
 
 "No diagnostics" is not the same as "every proof was attempted": definitions that use `Float64` arithmetic, `async`, or calls to a function such as `int.pow` stay at assurance level `typed` (see `summary.levels` in the JSON output of `cernith check --verify`). `tools/check_examples.py` lists them as notes; in these samples they are `average` (Float64), the async functions of `concurrency/`, and `raise` in `larger/minicalc`.
 
-Verified with Cernith cernith 2.0.0 (compiler repository commit `b576fd78`).
+Verified with cernith 2.0.0 (compiler repository commit `b576fd78`).
 
 ```text
 cernith test examples/types/refined_percent.cnth
@@ -15,11 +15,11 @@ cernith run examples/programs/todo_list_cli.cnth --args add:milk done:1
 cernith test examples/modules/ledger
 ```
 
-A file starts with comment lines: `Sample` (title), `Shows` (the features), `Chapter` (where to read about them), and, for programs with `main`, `Run`. Functions appear in the canonical order (by name), not in teaching order, so read the comments on each function rather than the file from top to bottom.
+Each file begins with comments giving its `Sample` title, the features it `Shows`, the relevant `Chapter`, and, for programs with `main`, a `Run` command. Functions are sorted by name in canonical order. Use their comments to navigate the example; the file order is not a suggested reading order.
 
 ## Basics
 
-The first programs: main, labels, control flow, text, integer division.
+Getting started with main, labels, control flow, text, and integer division.
 
 | File | What it shows | Chapter |
 |---|---|---|
@@ -94,7 +94,7 @@ example and property.
 
 ## Modules and packages
 
-Several modules, abstract types, a dependency between packages.
+Working across modules, hiding representations with abstract types, and declaring package dependencies.
 
 | File | What it shows | Chapter |
 |---|---|---|
@@ -135,7 +135,7 @@ Complete small tools and games, each a package of several modules with its own R
 
 ## Mistakes the compiler rejects
 
-Each file is expected to be rejected with the code on its first line; read the Mistake and Fix comments.
+Each file is expected to fail with the diagnostic code on its first line. The Mistake and Fix comments explain the error and its correction.
 
 | File | What it shows | Chapter |
 |---|---|---|

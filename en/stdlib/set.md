@@ -1,6 +1,6 @@
 # std.set
 
-This module provides `Set<T>`, a collection of values without duplicates. The element type `T` must be an ordered type (`Ord`). To use the functions of this module, write `import std.set;` and call them as in `set.add(...)`.
+This module provides `Set<T>`, a collection of unique values. Elements must satisfy `Ord`. Import it with `import std.set;` and call functions such as `set.add(...)`.
 
 A `Set` is a value. `set.add`, `set.union`, and the other functions do not modify the original set; they return a new one. Two `Set`s with the same elements are equal under `==`, regardless of the order in which the elements were added and of whether duplicates were added.
 
@@ -57,7 +57,7 @@ pub fn from_list<T: Ord>(items: List<T>) -> Set<T> {
 }
 ```
 
-A set of the elements of `items`. Even if the same value appears several times, it is merged into one, so the number of elements is at most `items.length`. If `items` is empty, the set is empty.
+Builds a set from `items`, merging duplicate values. The result has at most `items.length` elements and is empty when `items` is empty.
 
 ### set.add
 

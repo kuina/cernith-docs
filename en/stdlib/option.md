@@ -1,8 +1,8 @@
 # std.option
 
-This module provides functions on `Option<T>`. `Option<T>` is a type that represents either the presence of a value (`Some(value: x)`) or its absence (`None`), and it is in the prelude. To use the functions of this module, write `import std.option;` and call them as in `option.map(...)`.
+This module provides operations on the prelude type `Option<T>`, which represents a present value (`Some(value: x)`) or an absent one (`None`). Import it with `import std.option;` and call functions such as `option.map(...)`.
 
-The basic way to take a value out is `match` ([07 Records and variants](../language/07-records-and-variants.md)). The functions of this module are for writing common `match` patterns more briefly.
+Use `match` to handle an `Option` directly ([07 Records and variants](../language/07-records-and-variants.md)). This module offers shorter forms for common matching patterns.
 
 ## Function list
 

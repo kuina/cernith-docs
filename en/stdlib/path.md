@@ -1,6 +1,6 @@
 # std.path
 
-This module provides functions that handle file paths as strings. Write `import std.path;` and call its functions as in `path.join(parts: ...)`. Every function is pure and does not touch the file system. They only assemble, decompose, and tidy path strings.
+This module builds, splits, and normalizes file paths as strings. Import it with `import std.path;` and call functions such as `path.join(parts: ...)`. All functions are pure and do not access the file system.
 
 A path in `std.path` is a `String` that represents a **relative path separated by `/`**. There is no dedicated type. Write it as in `a/b/c.txt`. Paths that begin with `/` (absolute paths) and paths that use `\` as the separator are not handled (`\` is an ordinary character). The functions of [fs](fs.md), which open files, tidy the path with `path.normalize` before using it.
 
@@ -24,7 +24,7 @@ No function has a precondition, and any string can be passed.
 pub fn normalize(path: String) -> Option<String>
 ```
 
-Puts a path into the standard form.
+Normalizes a path using the following rules.
 
 - Empty parts (the `//` in `a//b`) and `.` parts are removed.
 - A `..` part cancels the part before it. `a/b/../c` becomes `a/c`.

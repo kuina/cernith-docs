@@ -1,8 +1,8 @@
 # Diagnostic codes
 
-A diagnostic reported by the checker has a **code** (five characters, such as `E0304`), a **name** (a name in one-to-one correspondence with the code, such as `missing-argument-label`), a message, and a location. If the first letter of the code is `E`, the diagnostic is an error; if it is `W`, a warning. When there are errors, `cernith check` exits with a non-zero exit code.
+Each checker diagnostic includes a **code** (five characters, such as `E0304`), a unique **name** (such as `missing-argument-label`), a message, and a location. Codes beginning with `E` indicate errors; those beginning with `W` indicate warnings. If any errors are reported, `cernith check` exits with a non-zero status.
 
-This page lists the codes that relate to the rules of the language. It shows the meaning of each code and the chapter that covers it. The codes of the intermediate representation (`E09xx`), the edit API (`E10xx`), and host functions (`E1304`) are not listed.
+This page lists language-related diagnostic codes, with their meanings and links to the relevant chapters. It omits codes for the intermediate representation (`E09xx`), the edit API (`E10xx`), and host functions (`E1304`).
 
 ```text
 file:line:col E0304 missing-argument-label: Arguments must be named: expected a, b. [fix (safe): Add the parameter names as labels.]

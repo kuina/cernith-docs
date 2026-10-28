@@ -1,6 +1,6 @@
 # std.float
 
-The module of basic functions for `Float64`. Write `import std.float;` and call a function as in `float.abs(value: x)`. Conversion from `Int`, conversion to and from strings, and the square root are in this module. Trigonometric functions, logarithms, powers, and `floor` and `round` are in [math](math.md).
+This module provides basic `Float64` operations, including conversion from `Int`, conversion to and from strings, and square roots. Import it with `import std.float;` and call functions such as `float.abs(value: x)`. For trigonometry, logarithms, powers, `floor`, and `round`, see [math](math.md).
 
 `Float64` takes only finite values, with no infinity and no NaN. For that reason, an operation whose result goes beyond the finite range is a defect. The checker reports the places where this can happen with `E0508` (float-overflow) ([03 Types](../language/03-types.md)).
 
@@ -38,7 +38,7 @@ The result of `abs` is 0.0 or greater, and is either `value` or `0.0 - value`. `
 pub fn sqrt(value: Float64) -> Float64
 ```
 
-The square root. The result is the `Float64` nearest to the true square root. `sqrt(value: 2.0)` is `1.4142135623730951`.
+Returns the nearest `Float64` to the exact square root. For example, `sqrt(value: 2.0)` returns `1.4142135623730951`.
 
 The precondition is `requires value >= 0.0;`. A call with a negative number is a defect (`Float64` has no value that represents the square root of a negative number). The postcondition is `result >= 0.0`.
 
@@ -95,7 +95,7 @@ The function returns `None` because input that does not match the format is an o
 pub fn to_text(value: Float64) -> String
 ```
 
-Converts a `Float64` to a string. The way it is written is fixed.
+Converts a `Float64` to a string using the following fixed format.
 
 - The digits are the shortest ones that read back to the same `Float64` (`0.1 + 0.2` is `"0.30000000000000004"`, and `0.1` is `"0.1"`).
 - When the decimal exponent of the value (the place of the most significant digit; 2 for `123.0`, −3 for `0.001`) is from −5 to 15, the value is written in positional notation. A decimal point is always included, and an integer gets `.0` (`"100.0"`, `"0.001"`, `"1000000000000000.0"`).

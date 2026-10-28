@@ -1,11 +1,11 @@
 # Resources and capabilities
 
-This is the mechanism by which a program handles external resources such as files and sockets safely. It consists of the following four principles.
+Cernith handles external resources such as files and sockets according to four principles:
 
 1. The program does not manage memory. There are no pointers, no allocation and deallocation, and no destructors.
 2. A **resource** (a file, a socket, a window) exists only inside the scope that releases it, and cannot leave that scope.
 3. **Authority is a value.** An operation that acts on the outside world requires a **capability** received from the program’s `manifest`.
-4. No code runs implicitly at a time the program has not written.
+4. Code runs only at points explicitly specified by the program.
 
 ## Second-class values
 
@@ -21,7 +21,7 @@ pub resource ReadFile release close_read;
 fn close_read(file: ReadFile) -> Result<Unit, FsError> uses io;
 ```
 
-`resource name release function;` declares an opaque type over an integer handle, similar to a `distinct` type. Only the module that defines the type creates or opens its values. The function given to `release` must be in the same module, take one parameter of that resource type, and return `Result<Unit, E>` (`E1105`).
+`resource name release function;` declares an opaque type backed by an integer handle, similar to a `distinct` type. Only the defining module can construct or open its values. The `release` function must be in the same module, accept one parameter of the resource type, and return `Result<Unit, E>` (`E1105`).
 
 A function that obtains a resource returns `Result<resource type, E>`. A resource type is neither `Eq` nor `Ord`, and cannot be a type argument or a field (`E1106`).
 
@@ -41,7 +41,7 @@ Evaluation proceeds in this order.
 4. If the body is `Ok` and the release returns `Err(e2)`, the value of the `using` is `Err(e2)`. If the body is `Err(e1)` and the release also fails, the value of the `using` is `Err(e1)`, and the `e2` from the release is recorded as a **suppressed** error and does not become a value.
 5. A defect ends the program. The release function is **not run** (because the state cannot be trusted).
 
-The following example opens a file, counts its lines, and closes the file without writing a call to close it.
+The following example opens a file and counts its lines. The file is closed automatically when the `using` body ends.
 
 ```cernith
 module guide.lines;

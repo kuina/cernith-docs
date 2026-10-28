@@ -1,8 +1,8 @@
 # std.list
 
-`List<T>` を扱う関数のモジュールです。`List<T>` は変更できない列で、このモジュールの関数は、どれも新しいリストか値を返し、引数のリストは変えません。使うには `import std.list;` と書き、`list.map(items: ..., apply: ...)` のように呼びます。引数はすべてラベル付きで、リストを受け取る引数のラベルは、`lists` を取る `flatten` と、`first` と `second` を取る `zip` を除いて `items` です（[06 関数](../language/06-functions.md)）。
+不変の列 `List<T>` を扱うモジュールです。各関数は、元のリストを変更せず、新しいリストや計算結果を返します。`import std.list;` で読み込み、`list.map(items: ..., apply: ...)` のように呼び出します。引数はすべてラベル付きです。リストを受け取るラベルは基本的に `items` ですが、`flatten` は `lists`、`zip` は `first` と `second` を使います（[06 関数](../language/06-functions.md)）。
 
-リストの長さと添字（`items.length`、`items[i]`）は言語の組み込みの機能で、モジュールの関数ではありません（[03 型](../language/03-types.md)）。ここにあるのは、それ以外の操作です。このモジュールは、`Pair<A, B>` というレコード型も定義します（[list.zip](#listzip-と-listpair) で使います）。
+リストの長さと添字（`items.length`、`items[i]`）は言語の組み込み機能です（[03 型](../language/03-types.md)）。このページでは、それ以外の操作を扱います。また、このモジュールで定義されるレコード型 `Pair<A, B>` は、[list.zip](#listzip-と-listpair) で使います。
 
 ## 関数一覧
 
@@ -42,7 +42,7 @@
 
 ### 関数を受け取る引数と効果
 
-`test`、`keep`、`apply`、`combine` のように関数を受け取る引数を持つ関数は、効果多相です。渡した関数が純粋なら呼び出しも純粋で、渡した関数が `uses io` なら、呼び出し側も `uses io` と宣言します（[11 効果](../language/11-effects.md)）。署名では `effect E` と `uses E` で表します。
+`test`、`keep`、`apply`、`combine` などのコールバックを受け取る関数は、効果多相です。純粋な関数を渡せば呼び出しも純粋になり、`uses io` の関数を渡せば呼び出し側にも `uses io` が必要です（[11 効果](../language/11-effects.md)）。シグネチャでは `effect E` と `uses E` で表します。
 
 例外は `list.sort_by` の `less_than` で、効果を持てません。効果のある関数を渡すと、エラー `E0404` になります。
 
@@ -54,7 +54,7 @@
 
 ### 事前条件を満たさない呼び出しは欠陥
 
-`list.take`、`list.drop`、`list.slice`、`list.range`、`list.repeat`、`list.windows` には事前条件（`requires`）があります。事前条件を満たさない呼び出しは**欠陥**で、プログラムはそこで止まります。欠陥はプログラムの中で捕まえられません（[12 エラーと欠陥](../language/12-errors-and-defects.md)）。
+`list.take`、`list.drop`、`list.slice`、`list.range`、`list.repeat`、`list.windows` には事前条件（`requires`）があります。事前条件を満たさない呼び出しは**欠陥**で、プログラムはそこで止まります。欠陥はプログラム内では捕捉できません（[12 エラーと欠陥](../language/12-errors-and-defects.md)）。
 
 テストでは、`defects(of: ...)` で、式が欠陥になることを確かめられます（[16 テスト](../language/16-testing.md)）。このページの例は、事前条件のある関数のすべてで、これを使っています。
 
@@ -72,7 +72,7 @@ pub fn preview(items: List<Int>) -> List<Int> {
 
 `items` が 3 個より短いと、`list.take` の事前条件に違反します。診断には、そうなる入力（反例の入力）として `items=[]` が示されます。呼び出し側の `requires` で同じ条件を要求すれば、受理されます（`guide.list_slicing` の `preview`）。事前条件の書き方は [09 契約](../language/09-contracts.md)、証明の扱いは [10 検証](../language/10-verification.md) にあります。
 
-> 補足：`list.take(items, count)` が、範囲を超える `count` を黙って切り詰めないのは、事後条件で `result.length == count` を保証するためです。範囲外の指定は、結果を返さず、欠陥にします。
+> 補足：`list.take(items, count)` は、範囲外の `count` を自動で切り詰めません。事後条件で `result.length == count` を保証するためです。指定した個数を返せない場合は、短いリストを返す代わりに欠陥になります。
 
 ## 関数の詳細
 
@@ -352,7 +352,7 @@ pub fn sort_by<T>(
 ) -> List<T>
 ```
 
-`list.sort` は昇順に並べ替えます。`list.sort_by` は、`less_than(first: a, second: b)` が `true` のとき `a` を `b` より前に置く順序で並べ替えます。どちらも安定です。比べて順序が付かない（`less_than` がどちらの向きでも `false` の）要素は、元の順序のままです。`list.sort` は、`<` を `less_than` にした `list.sort_by` と同じです。
+`list.sort` は昇順に並べ替えます。`list.sort_by` は、`less_than(first: a, second: b)` が `true` なら `a` を `b` より前に置きます。どちらも安定ソートで、`less_than` が両方向とも `false` になる要素どうしは、元の順序を保ちます。`list.sort` は、比較に `<` を使う `list.sort_by` と同じです。
 
 - 事前条件：なし。
 - 事後条件：`result.length == items.length`。`list.sort_by` は加えて、結果の隣り合う要素の組 `result[i]`、`result[i + 1]` のどれも `less_than(first: result[i + 1], second: result[i])` が `false` であること（逆順の組がないこと）を保証します。

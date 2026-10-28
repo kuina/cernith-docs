@@ -1,18 +1,18 @@
 # Sokoban
 
-A text-mode Sokoban puzzle in Cernith: a package of twelve small modules, all of the
-game logic in pure functions, and one thin `main` that reads standard input and prints
-boards. It is the largest sample in `examples/`, meant to show what a program with
-contracts, laws and end-to-end examples looks like when it is split into modules.
+A text-based Sokoban puzzle written as twelve small Cernith modules. All game logic
+is implemented in pure functions; a small `main` reads standard input and prints
+boards. This larger sample in `examples/` shows how to organize a program with
+contracts, laws, and end-to-end examples across multiple modules.
 
 You push boxes (`$`) onto goals (`.`). You can only push, one box at a time, and never
 into a wall or another box. When every box is on a goal the level is solved.
 
 ## How to run
 
-From the root of the documentation repository, give the moves on
-standard input, one line of letters per command line. The program prints a board after
-every line.
+Run from the documentation repository root, supplying moves through
+standard input, one command per line. Each command is a sequence of letters.
+The program prints a board after each line.
 
 ```text
 cernith run examples/larger/sokoban < examples/larger/sokoban/run.stdin
@@ -20,7 +20,7 @@ cernith run examples/larger/sokoban --args 2 < my_moves.txt
 ```
 
 `--args 2` picks level 2 (the default is level 1; there are five). A bad number gives
-a message and exit status 2. Checks (what `tools/check_examples.py` runs):
+a message and exit status 2. To run the same checks as `tools/check_examples.py`:
 
 ```text
 cernith fmt --check examples/larger/sokoban
@@ -118,7 +118,7 @@ moves: 17, pushes: 6 - SOLVED
 
 ## Module map
 
-Roughly from the bottom up (`samples` is a test fixture that `moves` and the modules above it use in their examples). Only `main` has `uses io`.
+Modules are listed roughly in dependency order. `samples` provides test fixtures for `moves` and the modules above it. Only `main` declares `uses io`.
 
 | Module | Role |
 |---|---|

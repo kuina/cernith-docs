@@ -1,6 +1,6 @@
 # Effects
 
-An **effect** is an observable interaction of a function with the outside world or with time. A function declares the effects it may have in its signature. A function that declares no effects is **pure**. Effects are the mechanism by which what a function does can be known from its signature alone, without reading its body.
+An **effect** is an observable interaction with the outside world or with time. Functions declare their possible effects in their signatures; a function with no declared effects is **pure**. This lets you see how a function interacts with its environment without reading its body.
 
 | Effect | Meaning |
 | --- | --- |
@@ -55,7 +55,7 @@ pub fn stamp() -> Int uses clock, io {
 
 A function type has effects. `fn(value: Int) -> Unit uses io` is the type of a function that performs input and output. A function value with fewer effects can be placed where more effects are allowed (`fn(...) -> T` is a subtype of `fn(...) -> T uses io`). The opposite is `E0404` (effect-mismatch).
 
-A function expression (lambda) declares its own effects. Inside a lambda, only the effects the lambda declares can be used, whatever the surrounding function declares. Calling a lambda that has effects beyond the declaration of the surrounding function makes that call `E0401`.
+A function expression (lambda) declares its own effects, independently of the enclosing function. Only those declared effects are available inside the lambda. Calling it from a function that does not declare all of its effects produces `E0401`.
 
 ```cernith-error E0404
 module guide.effects;
@@ -133,7 +133,7 @@ The effect `async` cannot be passed through an effect parameter (`E1205`). An as
 
 ## Capabilities and io
 
-Operations that act on the outside world (files, network, and the like) take a capability as an argument **and** declare `uses io`. Having a capability does not mean having the effect. If the function that calls the operation does not declare `uses io`, the result is `E0401` ([17 Resources and capabilities](17-resources-and-capabilities.md)).
+Operations on the outside world, such as file and network access, require a capability argument **and** a `uses io` declaration. Possessing the capability alone is not enough: the calling function must also declare `uses io`, or the checker reports `E0401` ([17 Resources and capabilities](17-resources-and-capabilities.md)).
 
 ## Diagnostic codes
 
