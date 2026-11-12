@@ -135,6 +135,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E0509` | measure-not-decreasing | `decreases` の減少量が、再帰呼び出しで小さくならない | [13](13-termination.md) |
 | `E0601` | termination-unproved | ループや再帰のグループに、停止の根拠がない | [13](13-termination.md) |
 | `E0602` | non-positive-recursive-type | 再帰的な型が、自分の再帰グループの値を取る関数を持つ | [13](13-termination.md) |
+| `E0603` | type-without-values | 宣言した型が値を持たない | [13](13-termination.md) |
 
 ## 未完成の箇所
 
@@ -170,6 +171,7 @@ file:line:col E0304 missing-argument-label: Arguments must be named: expected a,
 | `E1205` | async-through-effect-parameter | 効果 `async` を効果パラメータに通した | [18](18-concurrency.md) |
 | `E1206` | await-of-nothing | 中断できないものの前に `await` を書いた | [18](18-concurrency.md) |
 | `E1207` | await-in-using | `using` の本体が中断点を含む | [18](18-concurrency.md) |
+| `E1208` | async-without-std-async | 効果 `async` を使っているのに、プログラムのどのモジュールも `std.async` を読み込んでいない | [18](18-concurrency.md) |
 | `W1203` | wait-cannot-complete | チャネルから受信するが、送信しない | [18](18-concurrency.md) |
 
 ## インターフェースと遅延列

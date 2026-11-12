@@ -168,7 +168,7 @@ A defect is reported on standard error as a single JSON object, and the program 
 | `clause` | A string of the violated clause, or the operation |
 | `location` | The module and line |
 | `function` | The function that was running |
-| `values` | The values of the variables the clause refers to |
+| `values` | The values of the variables referenced by the clause, each represented as a JSON string containing Cernith source text. For example, the string `"ab"` is reported as `"\"ab\""`, the number `-1` as `"-1"`, and a list as `"[1, 2]"`. Programs built for Wasm or native targets report an empty object (`{}`) instead |
 | `message` | A description |
 
 Running the following program produces a defect report:

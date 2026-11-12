@@ -135,6 +135,7 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | `E0509` | measure-not-decreasing | The `decreases` measure does not get smaller in a recursive call | [13](13-termination.md) |
 | `E0601` | termination-unproved | A loop or a group of recursive functions has no basis for termination | [13](13-termination.md) |
 | `E0602` | non-positive-recursive-type | A recursive type has a function that takes a value of its own recursive group | [13](13-termination.md) |
+| `E0603` | type-without-values | A declared type has no values | [13](13-termination.md) |
 
 ## Unfinished code
 
@@ -170,6 +171,7 @@ In the code numbers, the hundreds digit roughly indicates the area: `E01xx` form
 | `E1205` | async-through-effect-parameter | The effect `async` was passed through an effect parameter | [18](18-concurrency.md) |
 | `E1206` | await-of-nothing | `await` was written in front of something that cannot suspend | [18](18-concurrency.md) |
 | `E1207` | await-in-using | The body of `using` contains a suspension point | [18](18-concurrency.md) |
+| `E1208` | async-without-std-async | The effect `async` is used, and no module of the program imports `std.async` | [18](18-concurrency.md) |
 | `W1203` | wait-cannot-complete | Receives from a channel but never sends | [18](18-concurrency.md) |
 
 ## Interfaces and sequences

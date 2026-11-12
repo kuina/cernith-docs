@@ -236,7 +236,7 @@ A type satisfies a bound in one of three ways.
 
 1. The type is a type parameter that has the bound in its own list (`Ord` also gives `Eq`).
 2. An `impl` of the interface exists for the type's constructor, and the bounds of that `impl`'s own parameters hold for the type's arguments. `List<Pen>` is `Priced` because `Pen` is. `List<String>` is not, if `String` is not.
-3. The type is a refined type that has no `impl` of its own, and its base type satisfies the bound. A `distinct` type is abstract, so it needs an `impl` of its own.
+3. The type is a refined type that has no `impl` of its own, its base type satisfies the bound, and no method of the interface has a return type containing `Self`. A method of the base type that returns `Self` (such as `codec.decode` or `fresh` above) does not guarantee that its result satisfies the refinement. Such an interface therefore requires an `impl` for the refined type itself; otherwise, the checker reports `E0316`. A `distinct` type is abstract, so it needs an `impl` of its own.
 
 An unsatisfied bound is `E0316`. It is checked after type inference, and the message names the concrete type and says that no `impl` exists.
 

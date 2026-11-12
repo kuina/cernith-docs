@@ -21,12 +21,15 @@
 | `list.flatten(lists)` | `List<T>` | リストのリストを連結 | なし |
 | `list.fold(items, initial, combine)` | `A` | 先頭から順に畳み込む | なし |
 | `list.index_of(items, item)` | `Option<Int>` | `item` と等しい最初の要素の位置 | なし |
+| `list.insert_at(items, index, item)` | `List<T>` | 位置 `index` の要素の前に `item` を入れたリスト | なし |
 | `list.last(items)` | `Option<T>` | 最後の要素 | なし |
 | `list.map(items, apply)` | `List<B>` | 各要素に `apply` を適用 | なし |
 | `list.max(items)` | `Option<T>` | 最大の要素 | なし |
 | `list.min(items)` | `Option<T>` | 最小の要素 | なし |
 | `list.range(from, to)` | `List<Int>` | `from` 以上 `to` 未満の整数 | `from <= to` |
+| `list.remove_at(items, index)` | `List<T>` | 位置 `index` の要素を除いたリスト | なし |
 | `list.repeat(item, count)` | `List<T>` | `item` を `count` 個並べたリスト | `count >= 0` |
+| `list.replace_at(items, index, item)` | `List<T>` | 位置 `index` の要素を `item` に置き換えたリスト | なし |
 | `list.reverse(items)` | `List<T>` | 逆順 | なし |
 | `list.slice(items, from, to)` | `List<T>` | 位置 `from` 以上 `to` 未満の部分 | `0 <= from and from <= to and to <= items.length` |
 | `list.sort(items)` | `List<T>` | 昇順に並べ替え | なし |
@@ -172,6 +175,29 @@ pub fn windows<T>(items: List<T>, size: Int) -> List<List<T>>
 
 - 事前条件：`size >= 1`。`size` が `0` や負の呼び出しは欠陥です。
 - 事後条件：なし。結果の長さは、`items.length - size + 1` です（これが負になるときは `0`）。
+
+### 位置を指定した要素の編集
+
+#### list.insert_at、list.remove_at、list.replace_at
+
+```text
+pub fn insert_at<T>(items: List<T>, index: Int, item: T) -> List<T>
+pub fn remove_at<T>(items: List<T>, index: Int) -> List<T>
+pub fn replace_at<T>(items: List<T>, index: Int, item: T) -> List<T>
+```
+
+位置 `index` に要素を 1 つ挿入するか、その位置の要素を削除・置換したリストを返します。位置は 0 から数えます。ほかの関数と同じく、`items` は変更しません。
+
+- `list.insert_at` は、位置 `index` の要素の前に `item` を入れます。`list.insert_at(items: [1, 2], index: 1, item: 9)` は `[1, 9, 2]` です。`index` が長さに等しければ末尾に入り、`list.insert_at(items: [1, 2], index: 2, item: 9)` は `[1, 2, 9]` です。
+- `list.remove_at` は、位置 `index` の要素を取り除きます。`list.remove_at(items: [1, 2, 3], index: 1)` は `[1, 3]` です。
+- `list.replace_at` は、位置 `index` の要素を `item` に置き換えます。`list.replace_at(items: [1, 2, 3], index: 1, item: 9)` は `[1, 9, 3]` です。
+
+この 3 つの関数は、`index` が範囲外でも欠陥になりません。`list.insert_at` は、`index` が `0` より小さければ先頭に、リストの長さより大きければ末尾に挿入します。`list.remove_at` と `list.replace_at` は、`index` が範囲外なら `items` をそのまま返します。たとえば `list.remove_at(items: [1, 2, 3], index: 3)` は `[1, 2, 3]` です。
+
+- 事前条件：なし。
+- 事後条件：`insert_at` は `result.length == items.length + 1`、`replace_at` は `result.length == items.length`。`remove_at` は、`index >= 0 and index < items.length` のとき `result.length == items.length - 1`、それ以外のとき `result.length == items.length`。
+
+要素を 1 つ挿入・削除・置換するときは、`list.take` と `list.drop` の結果を `++` でつなぐ代わりに、これらの関数を使えます。`take` と `drop` は、以前のリストに対して求めた位置が現在の範囲から外れている場合などに、欠陥になります。これらの関数なら、範囲外の位置を指定しても処理を続けられます。`index` が有効な範囲にあることを要求したい場合は、呼び出し側の `requires` にその条件を書きます。
 
 ### 探す・調べる
 
@@ -616,6 +642,64 @@ example drop_while_skips_the_prefix for without_leading_zeros {
       },
     )
       == [5, 1]
+}
+```
+
+### 位置を指定した要素の編集
+
+```cernith
+module guide.list_editing;
+
+import std.list;
+
+pub fn add_task(tasks: List<String>, place: Int, task: String) -> List<String> {
+  list.insert_at(items: tasks, index: place, item: task)
+}
+
+example insert_at_clamps_the_place for add_task {
+  add_task(tasks: ["a", "b"], place: -3, task: "x") == ["x", "a", "b"]
+    and add_task(tasks: ["a", "b"], place: 9, task: "x") == ["a", "b", "x"]
+}
+
+example insert_at_puts_the_item_before_the_place for add_task {
+  list.insert_at(items: [1, 2], index: 1, item: 9) == [1, 9, 2]
+    and list.insert_at(items: [1, 2], index: 2, item: 9) == [1, 2, 9]
+    and add_task(tasks: ["a", "c"], place: 1, task: "b") == ["a", "b", "c"]
+    and add_task(tasks: [], place: 0, task: "a") == ["a"]
+}
+
+pub fn drop_task(tasks: List<String>, place: Int) -> List<String> {
+  list.remove_at(items: tasks, index: place)
+}
+
+example remove_at_outside_the_list_changes_nothing for drop_task {
+  list.remove_at(items: [1, 2, 3], index: 3) == [1, 2, 3]
+    and drop_task(tasks: ["a", "b"], place: -1) == ["a", "b"]
+    and drop_task(tasks: [], place: 0) == []
+}
+
+example remove_at_takes_one_element_out for drop_task {
+  list.remove_at(items: [1, 2, 3], index: 1) == [1, 3]
+    and drop_task(tasks: ["a", "b", "c"], place: 2) == ["a", "b"]
+}
+
+pub fn rename_task(
+  tasks: List<String>,
+  place: Int,
+  task: String,
+) -> List<String> {
+  list.replace_at(items: tasks, index: place, item: task)
+}
+
+example replace_at_changes_one_element for rename_task {
+  list.replace_at(items: [1, 2, 3], index: 1, item: 9) == [1, 9, 3]
+    and rename_task(tasks: ["a", "b", "c"], place: 0, task: "x")
+      == ["x", "b", "c"]
+}
+
+example replace_at_outside_the_list_changes_nothing for rename_task {
+  rename_task(tasks: ["a", "b"], place: 2, task: "x") == ["a", "b"]
+    and rename_task(tasks: ["a", "b"], place: -1, task: "x") == ["a", "b"]
 }
 ```
 

@@ -60,7 +60,9 @@ The domains are all preconditions. A call that passes input outside the domain i
 
 `sin`, `cos`, and `tan` limit the magnitude of `x` because their angle-reduction calculation needs more digits of π for larger inputs than the module stores. The upper bound for `exp` reflects the fact that e raised to 710 exceeds the maximum `Float64` value.
 
-Even inside the domain, it is a defect if the result goes beyond the range of `Float64` (for example, when `hypot` is given two very large values). It is also a defect if an intermediate value of the computation goes beyond the range even though the result would fit: `atan2(y: 1.0e300, x: 1.0e-10)` is a defect because `y / x` is computed first, and for the same reason `acos` is a defect for an `x` whose magnitude is below about `5.6e-309`. Conversely, when the result of `exp` is smaller than the smallest `Float64` (as in `exp(x: -800.0)`), the result is `0.0`, not a defect.
+Even inside the domain, it is a defect if the result goes beyond the range of `Float64` (for example, when `hypot` is given two very large values). It is also a defect if an intermediate value goes beyond that range even though the final result would fit. For example, `pow(base: 1.0e200, exponent: -2.0)` is a defect because repeated squaring computes the intermediate value `1.0e400`.
+
+`atan2` avoids this kind of intermediate overflow by using `x / y` instead of `y / x` when the latter would have a large magnitude. For example, `atan2(y: 1.0e300, x: 1.0e-10)` returns `1.5707963267948966`. Because `acos` uses `atan2`, a very small `x` does not cause this kind of overflow either. When the result of `exp` is smaller than the smallest positive value representable by `Float64` (as in `exp(x: -800.0)`), it returns `0.0` without a defect.
 
 ## Accuracy
 
@@ -141,18 +143,23 @@ requires (
     and exponent >= -2147483648.0
     and exponent <= 2147483648.0
     and (base != 0.0 or exponent >= 0.0)
+    and (
+      float.abs(value: exponent) <= 64.0
+        or base == 0.0
+        or exponent * ln(x: float.abs(value: base)) <= 709.0
+    )
 )
   or (base > 0.0 and exponent * ln(x: base) <= 709.0);
 ```
 
-- The exponent is an integer value with an absolute value of 2³¹ or less. When the base is `0.0`, the exponent is 0 or greater. The base may be negative.
+- The exponent is an integer value with an absolute value of 2³¹ or less. When the base is `0.0`, the exponent is 0 or greater. The base may be negative. When the absolute value of the exponent is greater than 64 and the base is not `0.0`, `exponent * ln(x: float.abs(value: base))` is 709 or less.
 - The base is positive and `exponent * ln(x: base)` is 709 or less. The exponent may be fractional.
 
 The rule is that when the base is not positive the exponent must be an integer value, and when the base is `0.0` the exponent must also be 0 or greater; a call that does not follow it is a defect (`pow(base: -2.0, exponent: 0.5)`, `pow(base: 0.0, exponent: 0.5)`, and `pow(base: 0.0, exponent: -1.0)`). An odd power of a negative base is negative, and an even power is positive.
 
 The method of computation differs by exponent. An integer-valued exponent with an absolute value of 64 or less is computed by repeated squaring. Everything else is `exp(exponent * ln(base))`. The accuracy is as in the table in [Accuracy](#accuracy).
 
-When the exponent is an integer value greater than 64, the computation uses `exp`, so it is a defect if the result goes beyond the range of `Float64` (`pow(base: 10.0, exponent: 400.0)`). When the exponent is a small negative number and the result is smaller than the smallest `Float64`, the result is `0.0` (`pow(base: 10.0, exponent: -400.0)`). It is also a defect if the range is exceeded partway through the repeated squaring.
+When the exponent is an integer value whose absolute value is greater than 64, the computation uses `exp`, so the precondition requires the result to stay within the range of `Float64`. Both `pow(base: 10.0, exponent: 400.0)` and `pow(base: -10.0, exponent: 400.0)` violate this precondition. If a negative exponent makes the result smaller than the smallest positive value representable by `Float64`, the result is `0.0` (`pow(base: 10.0, exponent: -400.0)`). Exceeding the range during repeated squaring also causes a defect (`pow(base: 1.0e200, exponent: -2.0)`).
 
 ## Functions that produce integer values
 

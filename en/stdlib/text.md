@@ -18,6 +18,7 @@ All functions are pure and have no effects. A call that violates a precondition 
 | `text.from_code_point(value)` | `String` | Makes a string of length 1 from a code point |
 | `text.slice(of, from, to)` | `String` | The part from position `from` (inclusive) to `to` (exclusive) |
 | `text.index_of(of, part)` | `Option<Int>` | The position where `part` first appears |
+| `text.find(of, part, from)` | `Int` | The first position at or after `from` where `part` appears, or `-1` |
 | `text.contains(of, part)` | `Bool` | `true` if it contains `part` |
 | `text.starts_with(of, prefix)` | `Bool` | `true` if it starts with `prefix` |
 | `text.ends_with(of, suffix)` | `Bool` | `true` if it ends with `suffix` |
@@ -161,6 +162,25 @@ A missing match is an ordinary result, represented by `Option` rather than a sen
 - `text.index_of(of: "abc", part: "")` → `Some(value: 0)`
 - `text.index_of(of: "", part: "")` → `Some(value: 0)`
 - `text.index_of(of: "a", part: "ab")` → `None`
+
+### text.find
+
+```text
+pub fn find(of: String, part: String, from: Int) -> Int
+```
+
+Searches from position `from` onward and returns the position of the first occurrence of `part`, or `-1` if no match is found. Positions are counted in Unicode scalar values. Use this function to search from within a string, for example when finding every occurrence of a substring. `text.index_of` also searches from position `0`, but returns an `Option<Int>`. If `part` is empty, the result is `from`.
+
+Precondition: `0 <= from and from <= of.length`.
+
+Postcondition: the result is either `-1` or a position satisfying all of the following: `result >= from`, `result + part.length <= of.length`, and `text.slice(of: of, from: result, to: result + part.length) == part`.
+
+- `text.find(of: "banana", part: "an", from: 0)` → `1`
+- `text.find(of: "banana", part: "an", from: 2)` → `3`
+- `text.find(of: "banana", part: "an", from: 4)` → `-1`
+- `text.find(of: "a😀b😀", part: "😀", from: 2)` → `3`
+- `text.find(of: "abc", part: "", from: 3)` → `3`
+- `text.find(of: "abc", part: "a", from: 4)` → defect
 
 ### text.contains, text.starts_with, and text.ends_with
 
@@ -497,6 +517,20 @@ example ends_with_cases for last_character {
     and not text.ends_with(of: "report.txt", suffix: ".md")
     and text.ends_with(of: "a", suffix: "")
     and not text.ends_with(of: "a", suffix: "ba")
+}
+
+example find_from_a_position for last_character {
+  text.find(of: "banana", part: "an", from: 0) == 1
+    and text.find(of: "banana", part: "an", from: 2) == 3
+    and text.find(of: "banana", part: "an", from: 4) == -1
+    and text.find(of: "a😀b😀", part: "😀", from: 2) == 3
+    and text.find(of: "abc", part: "", from: 3) == 3
+    and text.find(of: "", part: "a", from: 0) == -1
+}
+
+example find_outside_the_text_is_a_defect for last_character {
+  defects(of: text.find(of: "abc", part: "a", from: 4))
+    and defects(of: text.find(of: "abc", part: "a", from: -1))
 }
 
 example from_code_point_makes_a_character for last_character {

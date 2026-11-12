@@ -21,12 +21,15 @@ The length and indexing of a list (`items.length`, `items[i]`) are built-in feat
 | `list.flatten(lists)` | `List<T>` | Concatenates a list of lists | None |
 | `list.fold(items, initial, combine)` | `A` | Folds in order from the start | None |
 | `list.index_of(items, item)` | `Option<Int>` | The position of the first element equal to `item` | None |
+| `list.insert_at(items, index, item)` | `List<T>` | The list with `item` placed before the element at `index` | None |
 | `list.last(items)` | `Option<T>` | The last element | None |
 | `list.map(items, apply)` | `List<B>` | Applies `apply` to each element | None |
 | `list.max(items)` | `Option<T>` | The largest element | None |
 | `list.min(items)` | `Option<T>` | The smallest element | None |
 | `list.range(from, to)` | `List<Int>` | The integers from `from` (inclusive) to `to` (exclusive) | `from <= to` |
+| `list.remove_at(items, index)` | `List<T>` | The list without the element at `index` | None |
 | `list.repeat(item, count)` | `List<T>` | A list of `count` copies of `item` | `count >= 0` |
+| `list.replace_at(items, index, item)` | `List<T>` | The list with the element at `index` replaced by `item` | None |
 | `list.reverse(items)` | `List<T>` | The reverse order | None |
 | `list.slice(items, from, to)` | `List<T>` | The part from position `from` (inclusive) to `to` (exclusive) | `0 <= from and from <= to and to <= items.length` |
 | `list.sort(items)` | `List<T>` | Sorts in ascending order | None |
@@ -172,6 +175,29 @@ Lists the contiguous parts of length `size`, shifting one position at a time fro
 
 - Precondition: `size >= 1`. A call in which `size` is `0` or negative is a defect.
 - Postcondition: none. The length of the result is `items.length - size + 1` (or `0` when that is negative).
+
+### Editing elements by position
+
+#### list.insert_at, list.remove_at, and list.replace_at
+
+```text
+pub fn insert_at<T>(items: List<T>, index: Int, item: T) -> List<T>
+pub fn remove_at<T>(items: List<T>, index: Int) -> List<T>
+pub fn replace_at<T>(items: List<T>, index: Int, item: T) -> List<T>
+```
+
+These functions return a list with an element inserted at position `index`, or with the element at that position removed or replaced. Positions are counted from 0. Like the other functions, they do not change `items`.
+
+- `list.insert_at` inserts `item` before the element at `index`. `list.insert_at(items: [1, 2], index: 1, item: 9)` is `[1, 9, 2]`. If `index` equals the list’s length, `item` is appended: `list.insert_at(items: [1, 2], index: 2, item: 9)` is `[1, 2, 9]`.
+- `list.remove_at` takes out the element at `index`. `list.remove_at(items: [1, 2, 3], index: 1)` is `[1, 3]`.
+- `list.replace_at` replaces the element at `index` with `item`. `list.replace_at(items: [1, 2, 3], index: 1, item: 9)` is `[1, 9, 3]`.
+
+An out-of-range `index` does not cause a defect in any of these three functions. `list.insert_at` inserts at the start if `index` is below `0`, or at the end if it is greater than the list’s length. `list.remove_at` and `list.replace_at` return `items` unchanged if `index` is out of range. For example, `list.remove_at(items: [1, 2, 3], index: 3)` is `[1, 2, 3]`.
+
+- Precondition: none.
+- Postcondition: `result.length == items.length + 1` for `insert_at`, and `result.length == items.length` for `replace_at`. For `remove_at`, `result.length == items.length - 1` when `index >= 0 and index < items.length`, and `result.length == items.length` otherwise.
+
+To insert, remove, or replace one element, you can use these functions instead of joining the results of `list.take` and `list.drop` with `++`. With `take` and `drop`, an out-of-range position causes a defect, for example if it was calculated for an earlier version of the list. These functions allow processing to continue even when the position is out of range. If you need to require a valid `index`, add that condition to the caller’s `requires` clause.
 
 ### Searching and inspecting
 
@@ -616,6 +642,64 @@ example drop_while_skips_the_prefix for without_leading_zeros {
       },
     )
       == [5, 1]
+}
+```
+
+### Editing elements by position
+
+```cernith
+module guide.list_editing;
+
+import std.list;
+
+pub fn add_task(tasks: List<String>, place: Int, task: String) -> List<String> {
+  list.insert_at(items: tasks, index: place, item: task)
+}
+
+example insert_at_clamps_the_place for add_task {
+  add_task(tasks: ["a", "b"], place: -3, task: "x") == ["x", "a", "b"]
+    and add_task(tasks: ["a", "b"], place: 9, task: "x") == ["a", "b", "x"]
+}
+
+example insert_at_puts_the_item_before_the_place for add_task {
+  list.insert_at(items: [1, 2], index: 1, item: 9) == [1, 9, 2]
+    and list.insert_at(items: [1, 2], index: 2, item: 9) == [1, 2, 9]
+    and add_task(tasks: ["a", "c"], place: 1, task: "b") == ["a", "b", "c"]
+    and add_task(tasks: [], place: 0, task: "a") == ["a"]
+}
+
+pub fn drop_task(tasks: List<String>, place: Int) -> List<String> {
+  list.remove_at(items: tasks, index: place)
+}
+
+example remove_at_outside_the_list_changes_nothing for drop_task {
+  list.remove_at(items: [1, 2, 3], index: 3) == [1, 2, 3]
+    and drop_task(tasks: ["a", "b"], place: -1) == ["a", "b"]
+    and drop_task(tasks: [], place: 0) == []
+}
+
+example remove_at_takes_one_element_out for drop_task {
+  list.remove_at(items: [1, 2, 3], index: 1) == [1, 3]
+    and drop_task(tasks: ["a", "b", "c"], place: 2) == ["a", "b"]
+}
+
+pub fn rename_task(
+  tasks: List<String>,
+  place: Int,
+  task: String,
+) -> List<String> {
+  list.replace_at(items: tasks, index: place, item: task)
+}
+
+example replace_at_changes_one_element for rename_task {
+  list.replace_at(items: [1, 2, 3], index: 1, item: 9) == [1, 9, 3]
+    and rename_task(tasks: ["a", "b", "c"], place: 0, task: "x")
+      == ["x", "b", "c"]
+}
+
+example replace_at_outside_the_list_changes_nothing for rename_task {
+  rename_task(tasks: ["a", "b"], place: 2, task: "x") == ["a", "b"]
+    and rename_task(tasks: ["a", "b"], place: -1, task: "x") == ["a", "b"]
 }
 ```
 

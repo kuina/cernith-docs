@@ -18,6 +18,7 @@
 | `text.from_code_point(value)` | `String` | コードポイントから長さ 1 の文字列を作る |
 | `text.slice(of, from, to)` | `String` | 位置 `from` 以上 `to` 未満の部分 |
 | `text.index_of(of, part)` | `Option<Int>` | `part` が最初に現れる位置 |
+| `text.find(of, part, from)` | `Int` | `from` 以降で `part` が最初に現れる位置、または `-1` |
 | `text.contains(of, part)` | `Bool` | `part` を含むなら `true` |
 | `text.starts_with(of, prefix)` | `Bool` | `prefix` で始まるなら `true` |
 | `text.ends_with(of, suffix)` | `Bool` | `suffix` で終わるなら `true` |
@@ -161,6 +162,25 @@ pub fn index_of(of: String, part: String) -> Option<Int>
 - `text.index_of(of: "abc", part: "")` → `Some(value: 0)`
 - `text.index_of(of: "", part: "")` → `Some(value: 0)`
 - `text.index_of(of: "a", part: "ab")` → `None`
+
+### text.find
+
+```text
+pub fn find(of: String, part: String, from: Int) -> Int
+```
+
+位置 `from` 以降を検索し、`part` が最初に見つかった位置を返します。位置は Unicode スカラー値単位で数え、見つからなければ `-1` を返します。同じ部分文字列が現れる位置をすべて探す場合など、文字列の途中から検索したいときに使います。`text.index_of` も位置 `0` から検索しますが、結果は `Option<Int>` で返します。`part` が空文字列なら、結果は `from` です。
+
+事前条件：`0 <= from and from <= of.length`。
+
+事後条件：結果は `-1`、または次の条件をすべて満たす位置です：`result >= from`、`result + part.length <= of.length`、`text.slice(of: of, from: result, to: result + part.length) == part`。
+
+- `text.find(of: "banana", part: "an", from: 0)` → `1`
+- `text.find(of: "banana", part: "an", from: 2)` → `3`
+- `text.find(of: "banana", part: "an", from: 4)` → `-1`
+- `text.find(of: "a😀b😀", part: "😀", from: 2)` → `3`
+- `text.find(of: "abc", part: "", from: 3)` → `3`
+- `text.find(of: "abc", part: "a", from: 4)` → 欠陥
 
 ### text.contains、text.starts_with、text.ends_with
 
@@ -497,6 +517,20 @@ example ends_with_cases for last_character {
     and not text.ends_with(of: "report.txt", suffix: ".md")
     and text.ends_with(of: "a", suffix: "")
     and not text.ends_with(of: "a", suffix: "ba")
+}
+
+example find_from_a_position for last_character {
+  text.find(of: "banana", part: "an", from: 0) == 1
+    and text.find(of: "banana", part: "an", from: 2) == 3
+    and text.find(of: "banana", part: "an", from: 4) == -1
+    and text.find(of: "a😀b😀", part: "😀", from: 2) == 3
+    and text.find(of: "abc", part: "", from: 3) == 3
+    and text.find(of: "", part: "a", from: 0) == -1
+}
+
+example find_outside_the_text_is_a_defect for last_character {
+  defects(of: text.find(of: "abc", part: "a", from: 4))
+    and defects(of: text.find(of: "abc", part: "a", from: -1))
 }
 
 example from_code_point_makes_a_character for last_character {

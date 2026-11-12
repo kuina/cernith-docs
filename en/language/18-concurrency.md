@@ -40,6 +40,7 @@ await async.scope(
 - The termination rules are the same for `async` functions ([13 Termination](13-termination.md)).
 - `await` cannot be written inside the body of `using` (`E1207`). Do the read inside, and the waiting outside.
 - `async` cannot be passed through an effect parameter (`E1205`). Do not pass an `async` function to `list.map`; write a loop instead.
+- A program that uses the effect `async` must import `std.async` in at least one module, because tasks run on its scheduler (`E1208`). In a module that uses the effect `async`, `import std.async;` is not reported as unused (`E0209`), even if the module does not call any functions from `std.async`.
 
 ```cernith
 module guide.tasks;
@@ -371,6 +372,7 @@ property order_does_not_matter for sum_of_two(seed: Int) {
 | `E1205` | async-through-effect-parameter | The effect `async` was passed through an effect parameter |
 | `E1206` | await-of-nothing | `await` was written in front of something that cannot suspend |
 | `E1207` | await-in-using | The body of `using` contains a suspension point |
+| `E1208` | async-without-std-async | The effect `async` is used, and no module of the program imports `std.async` |
 | `W1203` | wait-cannot-complete | The receiving end of a channel is used, and the sending end is never used |
 
 The following are also relevant: `E0401` (an `await` or a call to an `async` function was made without `async`), `E0404` (a function with effects was passed to `parallel`), `E0322` (a task captured a `var`), and `E1101` ([17 Resources and capabilities](17-resources-and-capabilities.md)).

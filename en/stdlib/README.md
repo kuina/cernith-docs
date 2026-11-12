@@ -10,7 +10,7 @@ The prelude types and names (`Int`, `Float64`, `Bool`, `String`, `Unit`, `List`,
 
 | Module | Contents |
 | --- | --- |
-| [std.list](list.md) | Functions on `List<T>`: find, slice, transform, fold, sort |
+| [std.list](list.md) | Functions on `List<T>`: find, slice, edit by position, transform, fold, sort |
 | [std.text](text.md) | Functions on `String`: split, search, replace, format |
 | [std.int](int.md) | Functions on `Int`: division with a choice of rounding, powers, bit operations, conversion to and from strings |
 | [std.float](float.md) | Functions on `Float64`: conversion, maximum and minimum, `sqrt` |

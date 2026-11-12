@@ -2,7 +2,7 @@
 
 This module builds, splits, and normalizes file paths as strings. Import it with `import std.path;` and call functions such as `path.join(parts: ...)`. All functions are pure and do not access the file system.
 
-A path in `std.path` is a `String` that represents a **relative path separated by `/`**. There is no dedicated type. Write it as in `a/b/c.txt`. Paths that begin with `/` (absolute paths) and paths that use `\` as the separator are not handled (`\` is an ordinary character). The functions of [fs](fs.md), which open files, tidy the path with `path.normalize` before using it.
+A path in `std.path` is a `String` that represents a **relative path separated by `/`**. There is no dedicated type. Write paths as in `a/b/c.txt`. `path.normalize` rejects absolute paths and paths that go above the starting point. It also treats `\` as a separator when performing this check; the other functions treat `\` as an ordinary character. The file-opening functions in [fs](fs.md) normalize paths with `path.normalize` before using them.
 
 ## Function list
 
@@ -26,6 +26,7 @@ pub fn normalize(path: String) -> Option<String>
 
 Normalizes a path using the following rules.
 
+- Backslashes (`\`) are also treated as separators and converted to `/` in the result. `data\fw.bin` becomes `data/fw.bin`.
 - Empty parts (the `//` in `a//b`) and `.` parts are removed.
 - A `..` part cancels the part before it. `a/b/../c` becomes `a/c`.
 - When the result would be empty (`""`, `"."`, `"./"`, `"a/.."`, and so on), the result is `Some(value: ".")`.
@@ -33,8 +34,8 @@ Normalizes a path using the following rules.
 
 It returns `None` in the following cases.
 
-- An absolute path (one that begins with `/`).
-- A path that goes above the starting point: one with a `..` where no part remains to be canceled, such as `../x` or `a/../../x`.
+- A path that begins with `/` or `\`, or a Windows path with a drive prefix (a character followed by `:`), such as `C:/x`, `c:\Users`, or `C:x`.
+- A path that goes above the starting point: one with a `..` where no part remains to be canceled, such as `../x`, `a/../../x`, or `..\x`.
 
 It returns `None` because **a path that points outside the root cannot be represented as a normalized result**. The functions of `fs` that return a `Result` reject a path for which `normalize` returns `None` as `FsError.Denied`; `fs.is_present` returns `false` for it ([fs](fs.md)).
 
@@ -73,7 +74,7 @@ Even if the file name contains several `.`, only the part after the last `.` is 
 pub fn parent(path: String) -> String
 ```
 
-Returns the path without its last part, when the path is separated by `/`. For a path that does not contain `/` (and for the empty string), the result is `"."`. It does not `normalize`, so the parent of `"a//b"` is `"a/"`.
+Returns the path without its last part, when the path is separated by `/`. For a path that does not contain `/` (and for the empty string), the result is `"."`. If the path begins with `/` and has no further separators, as in `"/x"`, the result is `"/"`. It does not normalize the path, so the parent of `"a//b"` is `"a/"`.
 
 ## Example
 

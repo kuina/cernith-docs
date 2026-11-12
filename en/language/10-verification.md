@@ -35,6 +35,8 @@ The checker generates obligations by symbolically executing function bodies. Ver
 
 `Float64` values are assumed to be finite.
 
+For obligations that do not directly concern floating-point values (all kinds other than `float-div` and `float-range`), the checker first attempts a proof with the result of each `Float64` computation replaced by an unknown `Float64` value. One example is checking the bounds of an index used after floating-point arithmetic. If this is enough to prove the obligation, its state is `proved`. Otherwise, the checker tries again with the floating-point computations included, as usual. The meanings of the states below stay the same, but fewer obligations end up as `unknown`.
+
 ## States
 
 An obligation ends up in one of the following states.

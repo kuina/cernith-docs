@@ -40,6 +40,7 @@ await async.scope(
 - 停止性の規則は、`async` の関数でも同じです（[13 停止性](13-termination.md)）。
 - `using` の本体には `await` を書けません（`E1207`）。読み出しは本体内で済ませ、待機はその外で行います。
 - `async` は、効果パラメータを通して渡せません（`E1205`）。`async` の関数を `list.map` に渡さず、ループで書きます。
+- 効果 `async` を使うプログラムでは、タスクの実行に `std.async` のスケジューラが必要なため、少なくとも 1 つのモジュールで `std.async` を読み込む必要があります（`E1208`）。効果 `async` を使うモジュールでは、`std.async` の関数を呼び出していなくても、`import std.async;` が未使用（`E0209`）として報告されることはありません。
 
 ```cernith
 module guide.tasks;
@@ -371,6 +372,7 @@ property order_does_not_matter for sum_of_two(seed: Int) {
 | `E1205` | async-through-effect-parameter | 効果 `async` を効果パラメータに通した |
 | `E1206` | await-of-nothing | 中断できないものの前に `await` を書いた |
 | `E1207` | await-in-using | `using` の本体が中断点を含む |
+| `E1208` | async-without-std-async | 効果 `async` を使っているのに、プログラムのどのモジュールも `std.async` を読み込んでいない |
 | `W1203` | wait-cannot-complete | チャネルの受信側を使い、送信側を一度も使わない |
 
 ほかに、`E0401`（`await` や `async` の呼び出しを `async` なしで行った）、`E0404`（`parallel` に効果のある関数を渡した）、`E0322`（タスクが `var` を取り込んだ）、`E1101`（[17 リソースとケイパビリティ](17-resources-and-capabilities.md)）が関係します。

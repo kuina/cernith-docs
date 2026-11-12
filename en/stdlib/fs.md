@@ -74,8 +74,8 @@ pub manifest Caps {
 
 The `path` passed to a function is a path relative to the root, with `/` as the separator ([path](path.md)). The function normalizes the path with `path.normalize` before joining it to the root. Therefore `dir/./b.txt` and `dir/b.txt` are the same file. A path for which `normalize` returns `None` is treated as one that **points outside the root** and is rejected with `Err(error: FsError.Denied(path: ...))`.
 
-- An absolute path (`/etc/passwd`).
-- A path that goes above the root (`../x`, `a/../../x`).
+- An absolute path, such as `/etc/passwd` or the Windows path `C:/Windows/win.ini`.
+- A path that goes above the root (`../x`, `a/../../x`, `..\x`).
 
 Using `..` in the middle of a path, as in `a/../b.txt`, is valid as long as it does not leave the root. The path is rejected without touching the file system, so nothing is revealed about what lies outside the root.
 

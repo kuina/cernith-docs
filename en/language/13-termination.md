@@ -37,7 +37,7 @@ An `E0601` diagnostic suggests a `decreases` clause, such as `decreases b - a;` 
 
 A function that calls itself, or a group of functions that call one another, needs one of the following.
 
-1. **Structural recursion** (single functions only). One of the parameters is matched with `match`, and the recursive call passes, in that parameter’s position, a variable bound by a pattern of that `match`. The argument of the call is then a proper part of the original value. A part produced by a library function such as `list.drop` does not count; it must be a part obtained from a pattern.
+1. **Structural recursion** (single functions only). One of the parameters is matched with `match`, and the recursive call passes a variable bound inside a constructor pattern in that parameter’s position. A variable bound by a further `match` on such a variable also qualifies. The argument of the call is then a proper part of the original value. If an arm’s pattern is just a name (`other => f(chain: other)`), that name refers to the whole parameter and does not count. A part produced by a library function such as `list.drop` does not count; it must be a part obtained from a pattern.
 2. **`decreases`.** Write `decreases M;` on every function of the group. For each call to a function in the group, the decreasing measure of the callee must be non-negative and smaller than the measure the caller had at its entry. If several `decreases` clauses are written, the measure is in **lexicographic order** of the clauses in the order written (the functions in the group must have the same number of components).
 3. **`uses diverge`.**
 
@@ -160,9 +160,9 @@ pub fn count_down(n: Int) -> Int {
 
 ## Recursion cannot hide from the call graph
 
-The checker builds a call graph from the calls in function bodies (a call inside a lambda is counted as belonging to the enclosing function) and finds the strongly connected components of mutually calling functions. This analysis is correct only if recursion cannot hide from the graph, and the following two rules guarantee that.
+The checker builds a call graph from the calls in function bodies (a call inside a lambda is counted as belonging to the enclosing function) and finds the strongly connected components of mutually calling functions. This analysis requires recursion to appear in the graph. The following rules are intended to prevent recursion that would be hidden from it.
 
-- A function expression (lambda) cannot refer, inside its own body, to the name it is bound to. Only named functions can recurse, and their calls become edges of the call graph.
+- A function expression (lambda) cannot refer, inside its own body, to the name it is bound to. Only named functions can recurse, and their calls become edges of the call graph. **Known limitation:** passing a named function as a value does not add an edge to the call graph. For example, if the function being defined is `spin`, passing it in `apply(g: spin, value: n)` allows recursion through that value to go undetected. The checker accepts this recursion without a termination argument.
 - **A recursive record or variant cannot have, as a field, a function that takes a value of its own recursive group as an argument** (`E0602`). If it could, recursion with no edge in the call graph (a fixed-point combinator) could be written, as in `record W { call: fn(w: W) -> Int }`. A function that does not take its own type as an argument can be a field.
 
 ```cernith-error E0602
@@ -170,6 +170,16 @@ module guide.termination;
 
 pub record Wrapper {
   call: fn(w: Wrapper) -> Int,
+}
+```
+
+- **It must be possible to construct a value of a declared type** (`E0603`). A `distinct` or refined type whose chain of base types leads back to itself, a record that contains itself, and a variant in which every case contains itself are rejected. No value could be constructed, and the checks would also run in a cycle. Recursive structures that can terminate are allowed, such as recursion through a `List` or an `Option`, or a variant with a case that does not contain the type itself.
+
+```cernith-error E0603
+module guide.no_values;
+
+pub record Endless {
+  next: Endless,
 }
 ```
 
@@ -213,6 +223,7 @@ Decreasing measures must be `Int` expressions, optionally combined lexicographic
 | --- | --- | --- |
 | `E0601` | termination-unproved | A `while` loop or a recursive group without a justification |
 | `E0602` | non-positive-recursive-type | A recursive type has a function that takes a value of its own recursive group |
+| `E0603` | type-without-values | A declared type has no values |
 | `E0509` | measure-not-decreasing | The decreasing measure does not become smaller (with a counterexample input) |
 | `W0504` | obligation-unproved | A `term` obligation that the solver could not decide |
 

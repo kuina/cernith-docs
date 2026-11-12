@@ -108,7 +108,7 @@ pub fn unfold<S, T>(
 ) -> Seq<T>
 ```
 
-`seq.iterate(seed: 1, next: ..., bound: 5)` with `next` doubling is `1, 2, 4, 8, 16`. `seq.unfold` makes each item from a state: `next` returns `Some(value: seq.Unfolded(item: ..., state: ...))` with the item and the next state, or `None` to stop. At most `bound` items are made.
+`seq.iterate(seed: 1, next: ..., bound: 5)` produces `1, 2, 4, 8, 16` if `next` doubles its input. `next` is called to generate each item after the first, only when that item is requested. Reading just the first item with `seq.first` does not call `next`. `seq.unfold` makes each item from a state: `next` returns `Some(value: seq.Unfolded(item: ..., state: ...))` with the item and the next state, or `None` to end the sequence. At most `bound` items are made.
 
 ### Combinators
 

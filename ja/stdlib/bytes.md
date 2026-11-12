@@ -28,12 +28,16 @@
 | `bytes.read_int(bytes, at, width, big_endian)` | `Int` | 同じ範囲を 2 の補数の符号つき整数として読む |
 | `bytes.uint_bytes(value, width, big_endian)` | `List<Int>` | 符号なし整数を `width` 個のバイトにする |
 | `bytes.int_bytes(value, width, big_endian)` | `List<Int>` | 符号つき整数を 2 の補数の `width` 個のバイトにする |
+| `bytes.read_floats(bytes, at, count, width, big_endian)` | `Floats` | 位置 `at` から `width` バイトの浮動小数点数を `count` 個読む |
+| `bytes.write_floats(values, width, big_endian)` | `Bytes` | 浮動小数点数を 1 つずつ `width` 個のバイトにする |
 | `bytes.from_text(text)` | `Bytes` | 文字列の UTF-8 |
 | `bytes.to_text(bytes)` | `Option<String>` | UTF-8 として文字列に戻す。不正なら `None` |
 | `bytes.to_hex(bytes)` | `String` | 16 進数の文字列 |
 | `bytes.from_hex(text)` | `Option<Bytes>` | 16 進数の文字列から作る。不正なら `None` |
 | `bytes.to_base64(bytes)` | `String` | Base64 の文字列 |
 | `bytes.from_base64(text)` | `Option<Bytes>` | Base64 の文字列から作る。不正なら `None` |
+| `bytes.is_base64(text)` | `Bool` | 正準形の Base64 の文字列なら `true` |
+| `bytes.decode_base64(text)` | `Bytes` | Base64 の文字列から作る。不正なら空の `Bytes` |
 
 以降の例の `→` の右は、呼び出しの値です。`→ 欠陥` は、その呼び出しが事前条件に違反して欠陥になることを表します。例では、`Bytes` を `[1, 2]` のようにリストで書きますが、これは「`bytes.from_list(items: [1, 2])` で作った `Bytes`」の略記です。これらは、末尾の「例」の `example` で確かめてあります。
 
@@ -304,6 +308,54 @@ pub fn int_bytes(value: Int, width: Int, big_endian: Bool) -> List<Int>
 - `bytes.int_bytes(value: -129, width: 1, big_endian: true)` → 欠陥
 - `bytes.int_bytes(value: 0, width: 0, big_endian: true)` → 欠陥
 
+## 浮動小数点数の読み書き
+
+IEEE 754 の浮動小数点数を、`Floats` 型の配列にまとめて読み込んだり、配列から書き出したりする関数です（[floats-ints](floats-ints.md)）。`width` は 1 要素あたりのバイト数で、4（単精度）か 8（倍精度）を指定します。`big_endian` は、整数の読み書きと同じくバイト順を指定します。
+
+### bytes.read_floats
+
+```text
+pub fn read_floats(
+  bytes: Bytes,
+  at: Int,
+  count: Int,
+  width: Int,
+  big_endian: Bool,
+) -> Floats
+```
+
+位置 `at` から、1 要素 `width` バイトの浮動小数点数を `count` 個読み込みます。無限大や NaN は `0.0` に置き換えるため、外部データからプログラム内に取り込まれることはありません。
+
+事前条件：`(width == 4 or width == 8) and at >= 0 and count >= 0 and at + count * width <= bytes.length(bytes: bytes)`。
+
+事後条件：結果の要素数は `count` です。
+
+- `bytes.read_floats(bytes: [0, 0, 128, 63, 0, 0, 0, 192], at: 0, count: 2, width: 4, big_endian: false)` → 数 `1.0` と `-2.0`
+- `bytes.read_floats(bytes: [63, 240, 0, 0, 0, 0, 0, 0], at: 0, count: 1, width: 8, big_endian: true)` → 数 `1.0`
+- `bytes.read_floats(bytes: [0, 0, 128, 127, 0, 0, 192, 127], at: 0, count: 2, width: 4, big_endian: false)`（無限大と NaN）→ 数 `0.0` と `0.0`
+- `bytes.read_floats(bytes: [0, 0, 128, 63], at: 1, count: 1, width: 4, big_endian: false)` → 欠陥
+- `bytes.read_floats(bytes: [0, 0, 128, 63], at: 0, count: 1, width: 2, big_endian: false)` → 欠陥
+
+### bytes.write_floats
+
+```text
+pub fn write_floats(values: Floats, width: Int, big_endian: Bool) -> Bytes
+```
+
+`values` の各要素を、順に `width` バイトで書き出します。`width` が 4 の場合は、最も近い単精度の値に丸めます。ちょうど中間の値は、仮数部の最下位ビットが 0 になる側に丸めます（偶数丸め）。単精度で表せる有限値の範囲（絶対値が約 `3.4e38` 以下）を超える場合は、その範囲の上限または下限に収めるため、無限大は書き出しません。
+
+事前条件：`width == 4 or width == 8`。
+
+事後条件：結果の長さは、`values` の要素数の `width` 倍です。
+
+- `bytes.write_floats(values: [1.0, -2.0], width: 4, big_endian: false)` → `[0, 0, 128, 63, 0, 0, 0, 192]`
+- `bytes.write_floats(values: [1.0], width: 8, big_endian: true)` → `[63, 240, 0, 0, 0, 0, 0, 0]`
+- `bytes.write_floats(values: [1.0e300], width: 4, big_endian: false)` → `[255, 255, 127, 127]`（単精度で表せる最大の有限値）
+- `0.1` を `width: 4` で書き出して読み戻すと `0.10000000149011612`
+- `bytes.write_floats(values: [1.0], width: 2, big_endian: true)` → 欠陥
+
+`Bytes` と同じく、`values: [1.0, -2.0]` は `floats.from_list(items: [1.0, -2.0])` の略記です。
+
 ## 文字列との変換
 
 ### bytes.from_text と bytes.to_text
@@ -413,6 +465,18 @@ pub fn from_base64(text: String) -> Option<Bytes>
 - `bytes.from_base64(text: "!!!!")` → `None`
 - `bytes.from_base64(text: "a-_=")` → `None`
 - `bytes.from_base64(text: "aGk=\n")` → `None`
+
+```text
+pub fn is_base64(text: String) -> Bool
+pub fn decode_base64(text: String) -> Bytes
+```
+
+`is_base64` は、文字列が `from_base64` の受け付ける正準形の Base64 である場合に限り `true` を返します。空文字列もこれに含まれます。`decode_base64` は、正準形の Base64 文字列をデコードした `Bytes` を返します。それ以外の文字列に対しては空の `Bytes` を返し、失敗することはありません。`from_base64` は、`bytes.is_base64(text: text)` が `true` なら `Some(value: bytes.decode_base64(text: text))`、それ以外なら `None` を返します。
+
+- `bytes.is_base64(text: "aGk=")` → `true`
+- `bytes.is_base64(text: "aB==")` → `false`
+- `bytes.decode_base64(text: "aGk=")` → `bytes.from_text(text: "hi")`
+- `bytes.decode_base64(text: "aGk")` → `bytes.empty()`
 
 ## 例
 
@@ -822,6 +886,119 @@ example read_uint_reads_either_order for read_length {
 }
 ```
 
+浮動小数点数の読み書きの例です。`encode` は浮動小数点数を単精度・リトルエンディアンで書き出し、`samples` はそれを読み戻します。
+
+```cernith
+module guide.bytes_floats;
+
+import std.bytes;
+import std.floats;
+
+pub fn bytes_of(items: List<Int>) -> Bytes {
+  match bytes.from_list(items: items) {
+    Some(value: found) => found,
+    None => bytes.empty(),
+  }
+}
+
+pub fn encode(values: List<Float64>) -> Bytes {
+  bytes.write_floats(
+    values: floats.from_list(items: values),
+    width: 4,
+    big_endian: false,
+  )
+}
+
+example write_floats_cuts_to_the_largest_finite_number for encode {
+  bytes.to_list(bytes: encode(values: [1.0e300]))
+    == bytes.to_list(bytes: encode(values: [3.4028234663852886e38]))
+    and bytes.to_list(bytes: encode(values: [3.4028234663852886e38]))
+      == [255, 255, 127, 127]
+}
+
+example write_floats_rounds_to_four_bytes for encode {
+  samples(data: encode(values: [0.1]), count: 1) == [0.10000000149011612]
+}
+
+example write_floats_with_a_bad_width_is_a_defect for encode {
+  defects(
+    of: bytes.write_floats(
+      values: floats.from_list(items: [1.0]),
+      width: 2,
+      big_endian: true,
+    ),
+  )
+}
+
+example write_floats_writes_either_order for encode {
+  bytes.to_list(bytes: encode(values: [1.0, -2.0]))
+    == [0, 0, 128, 63, 0, 0, 0, 192]
+    and bytes.to_list(
+      bytes: bytes.write_floats(
+        values: floats.from_list(items: [1.0]),
+        width: 8,
+        big_endian: true,
+      ),
+    )
+      == [63, 240, 0, 0, 0, 0, 0, 0]
+}
+
+pub fn samples(data: Bytes, count: Int) -> List<Float64> {
+  requires count >= 0 and count * 4 <= bytes.length(bytes: data);
+
+  floats.to_list(
+    array: bytes.read_floats(
+      bytes: data,
+      at: 0,
+      count: count,
+      width: 4,
+      big_endian: false,
+    ),
+  )
+}
+
+example read_floats_out_of_range_is_a_defect for samples {
+  defects(
+    of: bytes.read_floats(
+      bytes: bytes_of(items: [0, 0, 128, 63]),
+      at: 1,
+      count: 1,
+      width: 4,
+      big_endian: false,
+    ),
+  )
+    and defects(
+      of: bytes.read_floats(
+        bytes: bytes_of(items: [0, 0, 128, 63]),
+        at: 0,
+        count: 1,
+        width: 2,
+        big_endian: false,
+      ),
+    )
+}
+
+example read_floats_reads_either_order for samples {
+  samples(data: bytes_of(items: [0, 0, 128, 63, 0, 0, 0, 192]), count: 2)
+    == [1.0, -2.0]
+    and floats.to_list(
+      array: bytes.read_floats(
+        bytes: bytes_of(items: [63, 240, 0, 0, 0, 0, 0, 0]),
+        at: 0,
+        count: 1,
+        width: 8,
+        big_endian: true,
+      ),
+    )
+      == [1.0]
+}
+
+example read_floats_reads_what_is_not_finite_as_zero for samples {
+  samples(data: bytes_of(items: [0, 0, 128, 127, 0, 0, 192, 127]), count: 2)
+    == [0.0, 0.0]
+}
+```
+
 文字列との変換の例です。
 
 ```cernith
@@ -838,6 +1015,12 @@ pub fn bytes_of(items: List<Int>) -> Bytes {
 
 pub fn fingerprint(text: String) -> String {
   bytes.to_hex(bytes: bytes.from_text(text: text))
+}
+
+example decode_base64_gives_empty_bytes_for_other_text for fingerprint {
+  bytes.decode_base64(text: "aGk=") == bytes.from_text(text: "hi")
+    and bytes.decode_base64(text: "aGk") == bytes.empty()
+    and bytes.decode_base64(text: "aB==") == bytes.empty()
 }
 
 example fingerprint_is_the_hex_of_utf_8 for fingerprint {
@@ -887,6 +1070,14 @@ example from_text_writes_utf_8 for fingerprint {
   bytes.to_list(bytes: bytes.from_text(text: "aé€😀"))
     == [97, 195, 169, 226, 130, 172, 240, 159, 152, 128]
     and bytes.to_list(bytes: bytes.from_text(text: "")) == []
+}
+
+example is_base64_accepts_canonical_text_only for fingerprint {
+  bytes.is_base64(text: "aGk=")
+    and bytes.is_base64(text: "")
+    and not bytes.is_base64(text: "aGk")
+    and not bytes.is_base64(text: "aB==")
+    and not bytes.is_base64(text: "a-_=")
 }
 
 example to_base64_pads_to_four_characters for fingerprint {

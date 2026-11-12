@@ -108,7 +108,7 @@ pub fn unfold<S, T>(
 ) -> Seq<T>
 ```
 
-`seq.iterate(seed: 1, next: ..., bound: 5)` は、`next` が 2 倍にするなら `1, 2, 4, 8, 16` です。`seq.unfold` は、状態から要素を 1 つずつ作ります。`next` は、要素と次の状態を持つ `Some(value: seq.Unfolded(item: ..., state: ...))` か、止めるための `None` を返します。作られる要素は最大で `bound` 個です。
+`seq.iterate(seed: 1, next: ..., bound: 5)` は、`next` が値を 2 倍にする関数なら `1, 2, 4, 8, 16` を生成します。`next` は、2 個目以降の要素を取り出すときに、その要素を生成するために呼ばれます。`seq.first` で最初の要素だけを取り出す場合は呼ばれません。`seq.unfold` は、状態から要素を 1 つずつ作ります。`next` は、要素と次の状態を持つ `Some(value: seq.Unfolded(item: ..., state: ...))` か、生成を終えるための `None` を返します。作られる要素は最大で `bound` 個です。
 
 ### 組み合わせる
 

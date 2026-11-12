@@ -28,12 +28,16 @@ All functions are pure and have no effects. A call that does not satisfy a preco
 | `bytes.read_int(bytes, at, width, big_endian)` | `Int` | Reads the same range as a two’s-complement signed integer |
 | `bytes.uint_bytes(value, width, big_endian)` | `List<Int>` | Turns an unsigned integer into `width` bytes |
 | `bytes.int_bytes(value, width, big_endian)` | `List<Int>` | Turns a signed integer into `width` two’s-complement bytes |
+| `bytes.read_floats(bytes, at, count, width, big_endian)` | `Floats` | Reads `count` floating-point numbers of `width` bytes from position `at` |
+| `bytes.write_floats(values, width, big_endian)` | `Bytes` | Turns floating-point numbers into `width` bytes each |
 | `bytes.from_text(text)` | `Bytes` | The UTF-8 encoding of a string |
 | `bytes.to_text(bytes)` | `Option<String>` | Decodes as UTF-8 into a string. `None` if invalid |
 | `bytes.to_hex(bytes)` | `String` | A hexadecimal string |
 | `bytes.from_hex(text)` | `Option<Bytes>` | Builds from a hexadecimal string. `None` if invalid |
 | `bytes.to_base64(bytes)` | `String` | A Base64 string |
 | `bytes.from_base64(text)` | `Option<Bytes>` | Builds from a Base64 string. `None` if invalid |
+| `bytes.is_base64(text)` | `Bool` | `true` if the string is canonical Base64 |
+| `bytes.decode_base64(text)` | `Bytes` | Builds from a Base64 string. Empty `Bytes` if invalid |
 
 In the examples that follow, the right side of `→` is the value of the call. `→ defect` means that the call violates a precondition and is a defect. In the examples, a `Bytes` is written as a list such as `[1, 2]`; this is shorthand for “the `Bytes` built with `bytes.from_list(items: [1, 2])`.” These are checked by the `example`s in “Examples” at the end.
 
@@ -304,6 +308,54 @@ Postcondition: the length of the result is `width`.
 - `bytes.int_bytes(value: -129, width: 1, big_endian: true)` → defect
 - `bytes.int_bytes(value: 0, width: 0, big_endian: true)` → defect
 
+## Reading and writing floating-point numbers
+
+These functions read IEEE 754 floating-point numbers into a `Floats` array or write them from one ([floats-ints](floats-ints.md)). `width` specifies the number of bytes per element: 4 for single precision or 8 for double precision. As with the integer functions, `big_endian` specifies the byte order.
+
+### bytes.read_floats
+
+```text
+pub fn read_floats(
+  bytes: Bytes,
+  at: Int,
+  count: Int,
+  width: Int,
+  big_endian: Bool,
+) -> Floats
+```
+
+Reads `count` floating-point numbers of `width` bytes each, starting at position `at`. Infinities and NaNs are replaced with `0.0`, preventing external data from introducing them into a program.
+
+Precondition: `(width == 4 or width == 8) and at >= 0 and count >= 0 and at + count * width <= bytes.length(bytes: bytes)`.
+
+Postcondition: the result has `count` elements.
+
+- `bytes.read_floats(bytes: [0, 0, 128, 63, 0, 0, 0, 192], at: 0, count: 2, width: 4, big_endian: false)` → the numbers `1.0` and `-2.0`
+- `bytes.read_floats(bytes: [63, 240, 0, 0, 0, 0, 0, 0], at: 0, count: 1, width: 8, big_endian: true)` → the number `1.0`
+- `bytes.read_floats(bytes: [0, 0, 128, 127, 0, 0, 192, 127], at: 0, count: 2, width: 4, big_endian: false)` (an infinity and a NaN) → the numbers `0.0` and `0.0`
+- `bytes.read_floats(bytes: [0, 0, 128, 63], at: 1, count: 1, width: 4, big_endian: false)` → defect
+- `bytes.read_floats(bytes: [0, 0, 128, 63], at: 0, count: 1, width: 2, big_endian: false)` → defect
+
+### bytes.write_floats
+
+```text
+pub fn write_floats(values: Floats, width: Int, big_endian: Bool) -> Bytes
+```
+
+Writes each element of `values` as `width` bytes, in order. When `width` is 4, values are rounded to the nearest single-precision value, with ties rounded to the value whose significand has a least significant bit of 0 (ties to even). Values outside the finite single-precision range (magnitudes up to about `3.4e38`) are clamped to the upper or lower limit, so no infinity is written.
+
+Precondition: `width == 4 or width == 8`.
+
+Postcondition: the length of the result is the number of elements of `values` times `width`.
+
+- `bytes.write_floats(values: [1.0, -2.0], width: 4, big_endian: false)` → `[0, 0, 128, 63, 0, 0, 0, 192]`
+- `bytes.write_floats(values: [1.0], width: 8, big_endian: true)` → `[63, 240, 0, 0, 0, 0, 0, 0]`
+- `bytes.write_floats(values: [1.0e300], width: 4, big_endian: false)` → `[255, 255, 127, 127]` (the largest finite single-precision value)
+- Writing `0.1` with `width: 4` and reading it back gives `0.10000000149011612`
+- `bytes.write_floats(values: [1.0], width: 2, big_endian: true)` → defect
+
+In the same way as for `Bytes`, `values: [1.0, -2.0]` is shorthand for `floats.from_list(items: [1.0, -2.0])`.
+
 ## Conversion to and from strings
 
 ### bytes.from_text and bytes.to_text
@@ -413,6 +465,18 @@ An empty string gives `Some(value: bytes.empty())`.
 - `bytes.from_base64(text: "!!!!")` → `None`
 - `bytes.from_base64(text: "a-_=")` → `None`
 - `bytes.from_base64(text: "aGk=\n")` → `None`
+
+```text
+pub fn is_base64(text: String) -> Bool
+pub fn decode_base64(text: String) -> Bytes
+```
+
+`is_base64` returns `true` exactly when the string is in the canonical Base64 form accepted by `from_base64`, including the empty string. `decode_base64` returns the decoded `Bytes` for a canonical Base64 string. For any other string, it returns an empty `Bytes` without failing. `from_base64` returns `Some(value: bytes.decode_base64(text: text))` when `bytes.is_base64(text: text)` is `true`, and `None` otherwise.
+
+- `bytes.is_base64(text: "aGk=")` → `true`
+- `bytes.is_base64(text: "aB==")` → `false`
+- `bytes.decode_base64(text: "aGk=")` → `bytes.from_text(text: "hi")`
+- `bytes.decode_base64(text: "aGk")` → `bytes.empty()`
 
 ## Examples
 
@@ -822,6 +886,119 @@ example read_uint_reads_either_order for read_length {
 }
 ```
 
+Examples of reading and writing floating-point numbers. `encode` writes floating-point numbers in single precision and little-endian order, and `samples` reads them back.
+
+```cernith
+module guide.bytes_floats;
+
+import std.bytes;
+import std.floats;
+
+pub fn bytes_of(items: List<Int>) -> Bytes {
+  match bytes.from_list(items: items) {
+    Some(value: found) => found,
+    None => bytes.empty(),
+  }
+}
+
+pub fn encode(values: List<Float64>) -> Bytes {
+  bytes.write_floats(
+    values: floats.from_list(items: values),
+    width: 4,
+    big_endian: false,
+  )
+}
+
+example write_floats_cuts_to_the_largest_finite_number for encode {
+  bytes.to_list(bytes: encode(values: [1.0e300]))
+    == bytes.to_list(bytes: encode(values: [3.4028234663852886e38]))
+    and bytes.to_list(bytes: encode(values: [3.4028234663852886e38]))
+      == [255, 255, 127, 127]
+}
+
+example write_floats_rounds_to_four_bytes for encode {
+  samples(data: encode(values: [0.1]), count: 1) == [0.10000000149011612]
+}
+
+example write_floats_with_a_bad_width_is_a_defect for encode {
+  defects(
+    of: bytes.write_floats(
+      values: floats.from_list(items: [1.0]),
+      width: 2,
+      big_endian: true,
+    ),
+  )
+}
+
+example write_floats_writes_either_order for encode {
+  bytes.to_list(bytes: encode(values: [1.0, -2.0]))
+    == [0, 0, 128, 63, 0, 0, 0, 192]
+    and bytes.to_list(
+      bytes: bytes.write_floats(
+        values: floats.from_list(items: [1.0]),
+        width: 8,
+        big_endian: true,
+      ),
+    )
+      == [63, 240, 0, 0, 0, 0, 0, 0]
+}
+
+pub fn samples(data: Bytes, count: Int) -> List<Float64> {
+  requires count >= 0 and count * 4 <= bytes.length(bytes: data);
+
+  floats.to_list(
+    array: bytes.read_floats(
+      bytes: data,
+      at: 0,
+      count: count,
+      width: 4,
+      big_endian: false,
+    ),
+  )
+}
+
+example read_floats_out_of_range_is_a_defect for samples {
+  defects(
+    of: bytes.read_floats(
+      bytes: bytes_of(items: [0, 0, 128, 63]),
+      at: 1,
+      count: 1,
+      width: 4,
+      big_endian: false,
+    ),
+  )
+    and defects(
+      of: bytes.read_floats(
+        bytes: bytes_of(items: [0, 0, 128, 63]),
+        at: 0,
+        count: 1,
+        width: 2,
+        big_endian: false,
+      ),
+    )
+}
+
+example read_floats_reads_either_order for samples {
+  samples(data: bytes_of(items: [0, 0, 128, 63, 0, 0, 0, 192]), count: 2)
+    == [1.0, -2.0]
+    and floats.to_list(
+      array: bytes.read_floats(
+        bytes: bytes_of(items: [63, 240, 0, 0, 0, 0, 0, 0]),
+        at: 0,
+        count: 1,
+        width: 8,
+        big_endian: true,
+      ),
+    )
+      == [1.0]
+}
+
+example read_floats_reads_what_is_not_finite_as_zero for samples {
+  samples(data: bytes_of(items: [0, 0, 128, 127, 0, 0, 192, 127]), count: 2)
+    == [0.0, 0.0]
+}
+```
+
 Examples of conversion to and from strings.
 
 ```cernith
@@ -838,6 +1015,12 @@ pub fn bytes_of(items: List<Int>) -> Bytes {
 
 pub fn fingerprint(text: String) -> String {
   bytes.to_hex(bytes: bytes.from_text(text: text))
+}
+
+example decode_base64_gives_empty_bytes_for_other_text for fingerprint {
+  bytes.decode_base64(text: "aGk=") == bytes.from_text(text: "hi")
+    and bytes.decode_base64(text: "aGk") == bytes.empty()
+    and bytes.decode_base64(text: "aB==") == bytes.empty()
 }
 
 example fingerprint_is_the_hex_of_utf_8 for fingerprint {
@@ -887,6 +1070,14 @@ example from_text_writes_utf_8 for fingerprint {
   bytes.to_list(bytes: bytes.from_text(text: "aé€😀"))
     == [97, 195, 169, 226, 130, 172, 240, 159, 152, 128]
     and bytes.to_list(bytes: bytes.from_text(text: "")) == []
+}
+
+example is_base64_accepts_canonical_text_only for fingerprint {
+  bytes.is_base64(text: "aGk=")
+    and bytes.is_base64(text: "")
+    and not bytes.is_base64(text: "aGk")
+    and not bytes.is_base64(text: "aB==")
+    and not bytes.is_base64(text: "a-_=")
 }
 
 example to_base64_pads_to_four_characters for fingerprint {
